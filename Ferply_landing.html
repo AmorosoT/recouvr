@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Recouvr — Dashboard</title>
+<title>ferply — Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -168,7 +168,7 @@ function Dashboard({clients,factures,setView}){
             <span>⚠️</span>
             <div>
               <div style={{color:'#f85149',fontWeight:600,fontSize:'14px'}}>{retardF.length} facture(s) en retard</div>
-              <div style={{color:T.muted,fontSize:'13px'}}>{fmtEur(retardF.reduce((s,f)=>s+f.montant,0))} à recouvrer</div>
+              <div style={{color:T.muted,fontSize:'13px'}}>{fmtEur(retardF.reduce((s,f)=>s+f.montant,0))} à encaisser</div>
             </div>
           </div>
           <Btn onClick={()=>setView('relances')} variant="danger" style={{fontSize:'13px'}}>Gérer les relances →</Btn>
@@ -524,7 +524,7 @@ function App(){
     <div style={{display:'flex',height:'100vh',background:T.bg,color:T.text,overflow:'hidden',fontSize:'14px'}}>
       <aside style={{width:'210px',flexShrink:0,background:T.bg2,borderRight:`1px solid ${T.bd}`,display:'flex',flexDirection:'column'}}>
         <div style={{padding:'1.25rem',borderBottom:`1px solid ${T.bd}`}}>
-          <div style={{fontSize:'22px',fontWeight:900,color:T.white,letterSpacing:'-1px'}}>recouvr<span style={{color:T.teal}}>.</span></div>
+          <div style={{fontSize:'22px',fontWeight:900,color:T.white,letterSpacing:'-1px'}}>ferply<span style={{color:T.teal}}>.</span></div>
           <div style={{fontSize:'11px',color:T.muted,marginTop:'2px'}}>MVP v1.0</div>
         </div>
         <nav style={{padding:'1rem 0',flex:1}}>
