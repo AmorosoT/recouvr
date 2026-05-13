@@ -4,12 +4,15 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Ferply — Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231e3a5f'/><text y='72' x='50' text-anchor='middle' font-family='Georgia,serif' font-size='62' font-weight='700' fill='white'>F</text><circle cx='72' cy='72' r='8' fill='%231D4ED8'/></svg>"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#EEF2F7;color:#0f172a}
@@ -385,11 +388,14 @@ function Dashboard({clients,factures,setView}){
           </table>
         </div>
       </div>
+      {/* Graphiques */}
+      <div style={{marginTop:'2rem'}}>
+        <h3 style={{color:C.textPrimary,fontWeight:700,fontSize:'16px',margin:'0 0 1rem'}}>Analyse & graphiques</h3>
+        <Graphiques factures={factures} clients={clients}/>
+      </div>
     </div>
   );
 }
-
-/* ── FACTURES ────────────────────────────────────────────── */
 function Factures({user,clients,factures,setFactures,toast}){
   const [filter,setFilter]=useState('tous');
   const [search,setSearch]=useState('');
@@ -419,6 +425,7 @@ function Factures({user,clients,factures,setFactures,toast}){
           <p style={{color:C.textSecondary,fontSize:'14px',marginTop:'4px'}}>{factures.length} facture(s) au total</p>
         </div>
         <div style={{display:'flex',gap:'8px'}}>
+          <Btn onClick={()=>{const cfg=JSON.parse(localStorage.getItem('ferply-emailjs')||'{}');exportRapportPDF(factures,clients,cfg.companyName);}} variant="outline">📥 Rapport PDF</Btn>
           <Btn onClick={()=>setShowImport(true)} variant="outline">⬆ Importer</Btn>
           <Btn onClick={()=>setShowAdd(true)}>+ Nouvelle facture</Btn>
         </div>
@@ -449,6 +456,7 @@ function Factures({user,clients,factures,setFactures,toast}){
                   <td style={{padding:'11px 14px'}}><Badge s={f.statut}/></td>
                   <td style={{padding:'11px 14px'}}>
                     <div style={{display:'flex',gap:'5px'}}>
+                      <Btn onClick={()=>{const cfg=JSON.parse(localStorage.getItem('ferply-emailjs')||'{}');const client=clients.find(c=>c.id===f.client_id);exportFacturePDF(f,client,cfg.companyName);}} variant="outline" style={{padding:'4px 9px',fontSize:'11px'}}>📥 PDF</Btn>
                       {f.statut!=='payee'&&<Btn onClick={()=>markPaid(f.id)} variant="success" style={{padding:'4px 9px',fontSize:'11px'}}>✓ Payée</Btn>}
                       <Btn onClick={()=>del(f.id)} variant="danger" style={{padding:'4px 9px',fontSize:'11px'}}>✕</Btn>
                     </div>
@@ -485,7 +493,457 @@ function Factures({user,clients,factures,setFactures,toast}){
   );
 }
 
-/* ── RELANCES ────────────────────────────────────────────── */
+/* ── GRAPHIQUES ──────────────────────────────────────────── */
+function Graphiques({factures,clients}){
+  const chartRef1=useRef();const chartRef2=useRef();const chartRef3=useRef();
+  const chart1=useRef(null);const chart2=useRef(null);const chart3=useRef(null);
+
+  useEffect(()=>{
+    if(!factures.length)return;
+
+    // Graphique 1 — Trésorerie par mois (6 derniers mois)
+    const mois=[];
+    for(let i=5;i>=0;i--){
+      const d=new Date();d.setMonth(d.getMonth()-i);
+      mois.push({label:d.toLocaleDateString('fr-FR',{month:'short',year:'2-digit'}),key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`});
+    }
+    const encaisseParMois=mois.map(m=>factures.filter(f=>f.statut==='payee'&&f.echeance?.startsWith(m.key)).reduce((s,f)=>s+f.montant,0));
+    const retardParMois=mois.map(m=>factures.filter(f=>f.statut==='retard'&&f.echeance?.startsWith(m.key)).reduce((s,f)=>s+f.montant,0));
+
+    if(chart1.current)chart1.current.destroy();
+    if(chartRef1.current){
+      chart1.current=new Chart(chartRef1.current,{
+        type:'bar',
+        data:{labels:mois.map(m=>m.label),datasets:[
+          {label:'Encaissé',data:encaisseParMois,backgroundColor:'rgba(21,128,61,0.8)',borderRadius:6},
+          {label:'En retard',data:retardParMois,backgroundColor:'rgba(220,38,38,0.7)',borderRadius:6},
+        ]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:12},padding:16}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtEur(ctx.raw)}`}}},scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>fmtEur(v)},grid:{color:'rgba(0,0,0,0.05)'}}}},
+      });
+    }
+
+    // Graphique 2 — Répartition des statuts (donut)
+    const counts={attente:0,retard:0,relancee:0,payee:0};
+    factures.forEach(f=>counts[f.statut]=(counts[f.statut]||0)+f.montant);
+    if(chart2.current)chart2.current.destroy();
+    if(chartRef2.current){
+      chart2.current=new Chart(chartRef2.current,{
+        type:'doughnut',
+        data:{
+          labels:['En attente','En retard','Relancées','Payées'],
+          datasets:[{data:[counts.attente,counts.retard,counts.relancee,counts.payee],backgroundColor:['#fef3c7','#fee2e2','#dbeafe','#dcfce7'],borderColor:['#b45309','#dc2626','#1D4ED8','#15803d'],borderWidth:2}]
+        },
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:12}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${fmtEur(ctx.raw)}`}}}},
+      });
+    }
+
+    // Graphique 3 — Top 5 clients par montant dû
+    const clientStats=clients.map(c=>{
+      const total=factures.filter(f=>f.client_id===c.id&&f.statut!=='payee').reduce((s,f)=>s+f.montant,0);
+      return{nom:c.nom.split(' ')[0],total};
+    }).filter(c=>c.total>0).sort((a,b)=>b.total-a.total).slice(0,5);
+
+    if(chart3.current)chart3.current.destroy();
+    if(chartRef3.current&&clientStats.length){
+      chart3.current=new Chart(chartRef3.current,{
+        type:'bar',
+        data:{
+          labels:clientStats.map(c=>c.nom),
+          datasets:[{label:'Montant dû',data:clientStats.map(c=>c.total),backgroundColor:'rgba(29,78,216,0.8)',borderRadius:8}]
+        },
+        options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${fmtEur(ctx.raw)}`}}},scales:{x:{ticks:{callback:v=>fmtEur(v)},grid:{color:'rgba(0,0,0,0.05)'}},y:{grid:{display:false}}}},
+      });
+    }
+
+    return()=>{
+      if(chart1.current)chart1.current.destroy();
+      if(chart2.current)chart2.current.destroy();
+      if(chart3.current)chart3.current.destroy();
+    };
+  },[factures,clients]);
+
+  if(!factures.length)return(
+    <div style={{textAlign:'center',padding:'4rem',background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',color:C.textMuted}}>
+      <div style={{fontSize:'2rem',marginBottom:'1rem'}}>📊</div>
+      <div style={{fontWeight:600,color:C.textPrimary,marginBottom:'8px'}}>Pas encore de données</div>
+      <div style={{fontSize:'14px'}}>Ajoutez des factures pour voir vos graphiques</div>
+    </div>
+  );
+
+  return(
+    <div>
+      {/* Graphique 1 — Trésorerie mensuelle */}
+      <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',padding:'1.5rem',marginBottom:'1.5rem',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+        <h3 style={{color:C.textPrimary,fontWeight:700,fontSize:'15px',margin:'0 0 1.25rem'}}>📈 Trésorerie mensuelle — 6 derniers mois</h3>
+        <div style={{height:'240px'}}><canvas ref={chartRef1}/></div>
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1.5rem'}}>
+        {/* Graphique 2 — Répartition */}
+        <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',padding:'1.5rem',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+          <h3 style={{color:C.textPrimary,fontWeight:700,fontSize:'15px',margin:'0 0 1.25rem'}}>🥧 Répartition par statut</h3>
+          <div style={{height:'220px'}}><canvas ref={chartRef2}/></div>
+        </div>
+
+        {/* Graphique 3 — Top clients */}
+        <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',padding:'1.5rem',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+          <h3 style={{color:C.textPrimary,fontWeight:700,fontSize:'15px',margin:'0 0 1.25rem'}}>🏆 Top clients — montants dus</h3>
+          <div style={{height:'220px'}}><canvas ref={chartRef3}/></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function exportFacturePDF(facture,client,companyName){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF();
+  const blue=[29,78,216];
+  const navy=[30,58,95];
+  const gray=[71,85,105];
+  const light=[238,242,247];
+
+  // Header fond bleu marine
+  doc.setFillColor(...navy);
+  doc.rect(0,0,210,40,'F');
+
+  // Logo texte
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(24);
+  doc.setFont('helvetica','bold');
+  doc.text('Ferply.',15,22);
+  doc.setFontSize(9);
+  doc.setFont('helvetica','normal');
+  doc.setTextColor(148,163,184);
+  doc.text('La trésorerie, enfin sous contrôle.',15,30);
+
+  // Titre FACTURE
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(18);
+  doc.setFont('helvetica','bold');
+  doc.text('FACTURE',140,18,{align:'right'});
+  doc.setFontSize(11);
+  doc.setFont('helvetica','normal');
+  doc.text(facture.num,195,18,{align:'right'});
+
+  // Badge statut
+  const st=STATUTS[facture.statut]||STATUTS.attente;
+  doc.setFillColor(...(facture.statut==='payee'?[220,252,231]:facture.statut==='retard'?[254,226,226]:[219,234,254]));
+  doc.roundedRect(140,23,55,10,2,2,'F');
+  doc.setTextColor(...(facture.statut==='payee'?[21,128,61]:facture.statut==='retard'?[220,38,38]:[29,78,216]));
+  doc.setFontSize(9);
+  doc.setFont('helvetica','bold');
+  doc.text(st.label,167.5,30,{align:'center'});
+
+  // Infos facture
+  doc.setFillColor(...light);
+  doc.rect(0,40,210,30,'F');
+  doc.setTextColor(...gray);
+  doc.setFontSize(8);
+  doc.setFont('helvetica','normal');
+  doc.text('DATE D\'ÉMISSION',15,50);
+  doc.text('DATE D\'ÉCHÉANCE',65,50);
+  doc.text('MONTANT HT',120,50);
+  doc.text('STATUT',170,50);
+  doc.setTextColor(15,23,42);
+  doc.setFontSize(11);
+  doc.setFont('helvetica','bold');
+  doc.text(fmtDate(facture.emission),15,60);
+  doc.text(fmtDate(facture.echeance),65,60);
+  doc.text(fmtEur(facture.montant),120,60);
+  doc.setTextColor(...(facture.statut==='payee'?[21,128,61]:facture.statut==='retard'?[220,38,38]:[29,78,216]));
+  doc.text(st.label,170,60);
+
+  // Section client
+  doc.setTextColor(...navy);
+  doc.setFontSize(10);
+  doc.setFont('helvetica','bold');
+  doc.text('FACTURÉ À',15,82);
+  doc.setDrawColor(...blue);
+  doc.setLineWidth(0.5);
+  doc.line(15,84,80,84);
+
+  doc.setTextColor(15,23,42);
+  doc.setFontSize(12);
+  doc.setFont('helvetica','bold');
+  doc.text(client?.nom||'Client inconnu',15,93);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...gray);
+  if(client?.email)doc.text(client.email,15,100);
+  if(client?.tel)doc.text(client.tel,15,107);
+
+  // Section émetteur
+  doc.setTextColor(...navy);
+  doc.setFontSize(10);
+  doc.setFont('helvetica','bold');
+  doc.text('ÉMETTEUR',120,82);
+  doc.setDrawColor(...blue);
+  doc.line(120,84,195,84);
+  doc.setTextColor(15,23,42);
+  doc.setFontSize(12);
+  doc.setFont('helvetica','bold');
+  doc.text(companyName||'Mon Entreprise',120,93);
+
+  // Tableau détail
+  const tableY=125;
+  doc.setFillColor(...navy);
+  doc.rect(10,tableY,190,10,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(9);
+  doc.setFont('helvetica','bold');
+  doc.text('DESCRIPTION',15,tableY+7);
+  doc.text('MONTANT',175,tableY+7,{align:'right'});
+
+  doc.setFillColor(248,250,252);
+  doc.rect(10,tableY+10,190,14,'F');
+  doc.setTextColor(15,23,42);
+  doc.setFontSize(10);
+  doc.setFont('helvetica','normal');
+  doc.text(`Facture n°${facture.num}`,15,tableY+19);
+  doc.setFont('helvetica','bold');
+  doc.text(fmtEur(facture.montant),175,tableY+19,{align:'right'});
+
+  // Total
+  doc.setFillColor(...navy);
+  doc.rect(130,tableY+30,70,16,'F');
+  doc.setTextColor(148,163,184);
+  doc.setFontSize(9);
+  doc.setFont('helvetica','normal');
+  doc.text('TOTAL',135,tableY+39);
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(14);
+  doc.setFont('helvetica','bold');
+  doc.text(fmtEur(facture.montant),195,tableY+41,{align:'right'});
+
+  // Retard si applicable
+  if(facture.statut==='retard'){
+    const jours=daysDiff(facture.echeance);
+    doc.setFillColor(254,226,226);
+    doc.rect(10,tableY+55,190,16,'F');
+    doc.setTextColor(220,38,38);
+    doc.setFontSize(10);
+    doc.setFont('helvetica','bold');
+    doc.text(`⚠ Cette facture est en retard de ${jours} jour(s). Merci de régulariser rapidement.`,15,tableY+65);
+  }
+
+  // Footer
+  doc.setFillColor(...light);
+  doc.rect(0,272,210,28,'F');
+  doc.setTextColor(...gray);
+  doc.setFontSize(8);
+  doc.setFont('helvetica','normal');
+  doc.text('Généré par Ferply — ferply.netlify.app',105,282,{align:'center'});
+  doc.text(`Document généré le ${new Date().toLocaleDateString('fr-FR')}`,105,289,{align:'center'});
+  doc.setDrawColor(...blue);
+  doc.setLineWidth(0.3);
+  doc.line(0,272,210,272);
+
+  doc.save(`Facture-${facture.num}.pdf`);
+}
+
+function exportRapportPDF(factures,clients,companyName){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF();
+  const navy=[30,58,95];
+  const blue=[29,78,216];
+  const gray=[71,85,105];
+
+  // Header
+  doc.setFillColor(...navy);
+  doc.rect(0,0,210,35,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(20);
+  doc.setFont('helvetica','bold');
+  doc.text('Ferply.',15,18);
+  doc.setFontSize(13);
+  doc.setFont('helvetica','normal');
+  doc.text('Rapport de trésorerie',15,28);
+  doc.setFontSize(10);
+  doc.text(new Date().toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}),195,28,{align:'right'});
+
+  // Stats
+  const actives=factures.filter(f=>f.statut!=='payee');
+  const retard=factures.filter(f=>f.statut==='retard');
+  const payees=factures.filter(f=>f.statut==='payee');
+  const totalDu=actives.reduce((s,f)=>s+f.montant,0);
+  const totalRetard=retard.reduce((s,f)=>s+f.montant,0);
+  const totalEncaisse=payees.reduce((s,f)=>s+f.montant,0);
+
+  const stats=[
+    {label:'Total à encaisser',value:fmtEur(totalDu),color:[29,78,216]},
+    {label:'En retard',value:fmtEur(totalRetard),color:[220,38,38]},
+    {label:'Encaissé',value:fmtEur(totalEncaisse),color:[21,128,61]},
+    {label:'Nb clients',value:clients.length,color:[30,58,95]},
+  ];
+
+  stats.forEach((s,i)=>{
+    const x=10+i*50;
+    doc.setFillColor(248,250,252);
+    doc.rect(x,42,46,24,'F');
+    doc.setDrawColor(226,232,240);
+    doc.setLineWidth(0.3);
+    doc.rect(x,42,46,24,'S');
+    doc.setTextColor(...s.color);
+    doc.setFontSize(13);
+    doc.setFont('helvetica','bold');
+    doc.text(String(s.value),x+23,55,{align:'center'});
+    doc.setTextColor(...gray);
+    doc.setFontSize(7);
+    doc.setFont('helvetica','normal');
+    doc.text(s.label.toUpperCase(),x+23,62,{align:'center'});
+  });
+
+  // Tableau
+  const tableY=75;
+  doc.setFillColor(...navy);
+  doc.rect(10,tableY,190,9,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(8);
+  doc.setFont('helvetica','bold');
+  ['N° Facture','Client','Montant','Échéance','Statut'].forEach((h,i)=>{
+    doc.text(h,[15,50,100,140,170][i],tableY+6);
+  });
+
+  let y=tableY+9;
+  factures.slice(0,25).forEach((f,i)=>{
+    const client=clients.find(c=>c.id===f.client_id);
+    const st=STATUTS[f.statut]||STATUTS.attente;
+    doc.setFillColor(i%2===0?255:248,i%2===0?255:250,i%2===0?255:252);
+    doc.rect(10,y,190,9,'F');
+    doc.setTextColor(...gray);
+    doc.setFontSize(8);
+    doc.setFont('helvetica','normal');
+    doc.text(f.num,15,y+6);
+    doc.text((client?.nom||'—').slice(0,20),50,y+6);
+    doc.setFont('helvetica','bold');
+    doc.setTextColor(15,23,42);
+    doc.text(fmtEur(f.montant),100,y+6);
+    doc.setFont('helvetica','normal');
+    doc.setTextColor(...gray);
+    doc.text(fmtDate(f.echeance),140,y+6);
+    doc.setTextColor(f.statut==='payee'?21:f.statut==='retard'?220:29,f.statut==='payee'?128:f.statut==='retard'?38:78,f.statut==='payee'?61:f.statut==='retard'?38:216);
+    doc.setFont('helvetica','bold');
+    doc.text(st.label,170,y+6);
+    y+=9;
+    if(y>270){doc.addPage();y=20;}
+  });
+
+  // Footer
+  doc.setFillColor(238,242,247);
+  doc.rect(0,272,210,28,'F');
+  doc.setTextColor(...gray);
+  doc.setFontSize(8);
+  doc.setFont('helvetica','normal');
+  doc.text(`Rapport généré par Ferply — ${companyName||''}`,105,282,{align:'center'});
+  doc.text(`${new Date().toLocaleString('fr-FR')}`,105,289,{align:'center'});
+
+  doc.save(`Rapport-Ferply-${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+
+function RelancesAuto({user,toast}){
+  const defaultRules=[
+    {id:'r1',actif:true,declencheur:7, canal:'email',objet:'Rappel amiable — Facture {{invoice_number}}',message:'Bonjour {{to_name}},\n\nNous vous rappelons que votre facture n°{{invoice_number}} d\'un montant de {{amount}} arrive à échéance dans 7 jours ({{due_date}}).\n\nMerci de prévoir le règlement.\n\nCordialement,\n{{company_name}}',type:'avant'},
+    {id:'r2',actif:true,declencheur:1, canal:'email',objet:'Facture {{invoice_number}} — Échéance demain',message:'Bonjour {{to_name}},\n\nVotre facture n°{{invoice_number}} de {{amount}} arrive à échéance demain ({{due_date}}).\n\nMerci de procéder au règlement.\n\nCordialement,\n{{company_name}}',type:'avant'},
+    {id:'r3',actif:true,declencheur:3, canal:'email',objet:'Relance — Facture {{invoice_number}} en retard',message:'Bonjour {{to_name}},\n\nVotre facture n°{{invoice_number}} de {{amount}} est en retard de {{days_late}}.\n\nMerci de régulariser rapidement.\n\nCordialement,\n{{company_name}}',type:'apres'},
+    {id:'r4',actif:true,declencheur:15,canal:'email',objet:'2ème relance — Facture {{invoice_number}}',message:'Bonjour {{to_name}},\n\nMalgré nos précédents rappels, la facture n°{{invoice_number}} de {{amount}} reste impayée depuis {{days_late}}.\n\nSans réponse sous 48h, nous nous verrons contraints d\'engager une procédure de recouvrement.\n\nCordialement,\n{{company_name}}',type:'apres'},
+  ];
+
+  const [rules,setRules]=useState(()=>{
+    const s=localStorage.getItem('ferply-relances-rules');
+    return s?JSON.parse(s):defaultRules;
+  });
+  const [editRule,setEditRule]=useState(null);
+  const [showEdit,setShowEdit]=useState(false);
+
+  const saveRules=r=>{setRules(r);localStorage.setItem('ferply-relances-rules',JSON.stringify(r));toast('✓ Règles sauvegardées');};
+  const toggleRule=id=>{const r=rules.map(r=>r.id===id?{...r,actif:!r.actif}:r);saveRules(r);};
+  const deleteRule=id=>{if(!window.confirm('Supprimer cette règle ?'))return;saveRules(rules.filter(r=>r.id!==id));};
+  const saveEdit=()=>{
+    if(editRule.id){saveRules(rules.map(r=>r.id===editRule.id?editRule:r));}
+    else{saveRules([...rules,{...editRule,id:'r'+uid()}]);}
+    setShowEdit(false);setEditRule(null);
+  };
+
+  const typeLabel=t=>t==='avant'?'avant échéance':'après échéance';
+  const typeColor=t=>t==='avant'?C.amber:C.red;
+
+  return(
+    <div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem'}}>
+        <div>
+          <h3 style={{color:C.textPrimary,fontWeight:700,fontSize:'16px',margin:0}}>⚡ Relances automatiques</h3>
+          <p style={{color:C.textSecondary,fontSize:'13px',marginTop:'4px'}}>Définissez vos règles — les emails partent automatiquement</p>
+        </div>
+        <Btn onClick={()=>{setEditRule({id:'',declencheur:7,canal:'email',objet:'',message:'',type:'apres',actif:true});setShowEdit(true);}}>+ Nouvelle règle</Btn>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:'1rem'}}>
+        {rules.map(r=>(
+          <div key={r.id} style={{background:C.cardBg,border:`1px solid ${r.actif?C.border:C.borderDark}`,borderRadius:'12px',padding:'1.25rem',opacity:r.actif?1:0.6,boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'1rem',flexWrap:'wrap'}}>
+              {/* Toggle */}
+              <div onClick={()=>toggleRule(r.id)} style={{width:44,height:24,borderRadius:'100px',background:r.actif?C.blue:'#cbd5e1',cursor:'pointer',position:'relative',flexShrink:0,transition:'background .2s'}}>
+                <div style={{width:18,height:18,borderRadius:'50%',background:'#fff',position:'absolute',top:3,left:r.actif?23:3,transition:'left .2s'}}/>
+              </div>
+              {/* Déclencheur */}
+              <div style={{background:typeColor(r.type)+'15',border:`1px solid ${typeColor(r.type)}33`,borderRadius:'8px',padding:'4px 12px',fontSize:'13px',fontWeight:700,color:typeColor(r.type),whiteSpace:'nowrap'}}>
+                J{r.type==='avant'?'-':'+​'}{r.declencheur} {typeLabel(r.type)}
+              </div>
+              {/* Objet */}
+              <div style={{flex:1,minWidth:'180px'}}>
+                <div style={{color:C.textPrimary,fontWeight:600,fontSize:'14px',marginBottom:'2px'}}>{r.objet||'Sans objet'}</div>
+                <div style={{color:C.textMuted,fontSize:'12px'}}>{r.canal==='email'?'📧 Email automatique':r.canal}</div>
+              </div>
+              {/* Actions */}
+              <div style={{display:'flex',gap:'6px'}}>
+                <Btn onClick={()=>{setEditRule({...r});setShowEdit(true);}} variant="outline" style={{padding:'5px 10px',fontSize:'12px'}}>✏️ Modifier</Btn>
+                <Btn onClick={()=>deleteRule(r.id)} variant="danger" style={{padding:'5px 10px',fontSize:'12px'}}>✕</Btn>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!rules.length&&<div style={{textAlign:'center',padding:'3rem',background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',color:C.textMuted}}>Aucune règle — créez votre première relance automatique</div>}
+
+      {showEdit&&editRule&&(
+        <Modal title={editRule.id?'Modifier la règle':'Nouvelle règle'} onClose={()=>{setShowEdit(false);setEditRule(null);}} width={560}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1rem',marginBottom:'1rem'}}>
+            <div>
+              <label style={{display:'block',fontSize:'13px',color:C.textSecondary,marginBottom:'5px',fontWeight:500}}>Type</label>
+              <select value={editRule.type} onChange={e=>setEditRule({...editRule,type:e.target.value})} style={{width:'100%',padding:'9px 12px',background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:'8px',color:C.textPrimary,fontSize:'14px',outline:'none'}}>
+                <option value="avant">Avant échéance</option>
+                <option value="apres">Après échéance</option>
+              </select>
+            </div>
+            <div>
+              <label style={{display:'block',fontSize:'13px',color:C.textSecondary,marginBottom:'5px',fontWeight:500}}>Nombre de jours</label>
+              <input type="number" min="1" value={editRule.declencheur} onChange={e=>setEditRule({...editRule,declencheur:parseInt(e.target.value)||1})} style={{width:'100%',padding:'9px 12px',background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:'8px',color:C.textPrimary,fontSize:'14px',outline:'none'}}/>
+            </div>
+          </div>
+          <div style={{marginBottom:'1rem'}}>
+            <label style={{display:'block',fontSize:'13px',color:C.textSecondary,marginBottom:'5px',fontWeight:500}}>Objet de l'email</label>
+            <input value={editRule.objet} onChange={e=>setEditRule({...editRule,objet:e.target.value})} placeholder="Relance — Facture {{invoice_number}}" style={{width:'100%',padding:'9px 12px',background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:'8px',color:C.textPrimary,fontSize:'14px',outline:'none',boxSizing:'border-box'}}/>
+          </div>
+          <div style={{marginBottom:'1rem'}}>
+            <label style={{display:'block',fontSize:'13px',color:C.textSecondary,marginBottom:'5px',fontWeight:500}}>Message</label>
+            <textarea value={editRule.message} onChange={e=>setEditRule({...editRule,message:e.target.value})} rows={7} style={{width:'100%',padding:'12px',background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:'8px',color:C.textPrimary,fontSize:'13px',outline:'none',fontFamily:'Georgia,serif',lineHeight:1.7,boxSizing:'border-box'}}/>
+          </div>
+          <div style={{background:C.pageBg,borderRadius:'8px',padding:'10px 12px',fontSize:'11px',color:C.textSecondary,marginBottom:'1rem'}}>
+            Variables : <code style={{color:C.blue}}>{'{{to_name}}'}</code> <code style={{color:C.blue}}>{'{{invoice_number}}'}</code> <code style={{color:C.blue}}>{'{{amount}}'}</code> <code style={{color:C.blue}}>{'{{due_date}}'}</code> <code style={{color:C.blue}}>{'{{days_late}}'}</code> <code style={{color:C.blue}}>{'{{company_name}}'}</code>
+          </div>
+          <div style={{display:'flex',justifyContent:'flex-end',gap:'8px'}}>
+            <Btn onClick={()=>{setShowEdit(false);setEditRule(null);}} variant="outline">Annuler</Btn>
+            <Btn onClick={saveEdit}>Sauvegarder</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+
 function Relances({clients,factures,setFactures,toast}){
   const [sending,setSending]=useState(new Set());
   const [sentLog,setSentLog]=useState([]);
@@ -786,6 +1244,34 @@ function App(){
           return fac;
         });
         setFactures(updated);
+        // Vérifier les relances automatiques
+        const cfg=JSON.parse(localStorage.getItem('ferply-emailjs')||'{}');
+        const rules=JSON.parse(localStorage.getItem('ferply-relances-rules')||'[]');
+        if(cfg.serviceId&&cfg.templateId&&cfg.publicKey&&rules.length){
+          const todayDate=new Date();
+          updated.filter(fac=>fac.statut!=='payee').forEach(async fac=>{
+            if(!fac.echeance)return;
+            const client=c?.find(cl=>cl.id===fac.client_id);
+            if(!client?.email)return;
+            const echeance=new Date(fac.echeance);
+            const diffJours=Math.round((todayDate-echeance)/864e5);
+            rules.filter(r=>r.actif).forEach(async rule=>{
+              const jours=rule.type==='avant'?-rule.declencheur:rule.declencheur;
+              if(diffJours===jours){
+                const lastKey=`ferply-sent-${fac.id}-${rule.id}-${today}`;
+                if(localStorage.getItem(lastKey))return;
+                try{
+                  await fetch('https://api.emailjs.com/api/v1.0/email/send',{method:'POST',headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({service_id:cfg.serviceId,template_id:cfg.templateId,user_id:cfg.publicKey,
+                      template_params:{to_name:client.nom,to_email:client.email,invoice_number:fac.num,amount:fmtEur(fac.montant),due_date:fmtDate(fac.echeance),days_late:Math.abs(diffJours)+' jours',company_name:cfg.companyName||'Ferply',
+                        message:rule.message.replace(/{{to_name}}/g,client.nom).replace(/{{invoice_number}}/g,fac.num).replace(/{{amount}}/g,fmtEur(fac.montant)).replace(/{{due_date}}/g,fmtDate(fac.echeance)).replace(/{{days_late}}/g,Math.abs(diffJours)+' jours').replace(/{{company_name}}/g,cfg.companyName||'Ferply')}})});
+                  localStorage.setItem(lastKey,'1');
+                  if(rule.type==='apres')await sb.from('factures').update({statut:'relancee'}).eq('id',fac.id);
+                }catch(e){console.error('Auto-relance erreur:',e);}
+              }
+            });
+          });
+        }
       }
     })();
   },[session]);
@@ -803,6 +1289,7 @@ function App(){
   const retardCount=factures.filter(f=>f.statut==='retard').length;
   const nav=[
     {id:'dashboard',icon:'⊞',label:'Dashboard'},
+    {id:'devis',    icon:'📋',label:'Devis'},
     {id:'factures', icon:'📄',label:'Factures'},
     {id:'relances', icon:'⚡',label:'Relances',badge:retardCount||null},
     {id:'clients',  icon:'👥',label:'Clients'},
@@ -835,6 +1322,7 @@ function App(){
       </aside>
       <main style={{flex:1,overflow:'auto',padding:'2rem',background:C.pageBg}}>
         {view==='dashboard'  &&<Dashboard  clients={clients} factures={factures} setView={setView}/>}
+        {view==='devis'      &&<Devis      user={session.user} clients={clients} toast={toast}/>}
         {view==='factures'   &&<Factures   user={session.user} clients={clients} factures={factures} setFactures={setFactures} toast={toast}/>}
         {view==='relances'   &&<Relances   clients={clients} factures={factures} setFactures={setFactures} toast={toast}/>}
         {view==='clients'    &&<Clients    user={session.user} clients={clients} setClients={setClients} factures={factures} setFactures={setFactures} toast={toast}/>}
