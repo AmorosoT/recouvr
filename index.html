@@ -36,12 +36,12 @@ const daysDiff=d=>Math.round((Date.now()-new Date(d))/864e5);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 const now=new Date();
 
-const T={bg:'#0d1117',bg2:'#161b22',bg3:'#21262d',bd:'#30363d',text:'#e6edf3',muted:'#8b949e',teal:'#1d9e75',white:'#fff',r8:'8px',r12:'12px'};
+const T={bg:'#F8FAFF',bg2:'#FFFFFF',bg3:'#F1F5F9',bd:'#E2E8F0',text:'#0f172a',muted:'#64748b',teal:'#1D4ED8',white:'#fff',r8:'8px',r12:'12px',sidebar:'#1e3a5f',sidebarText:'#cbd5e1',sidebarActive:'rgba(255,255,255,0.1)'};
 const STATUTS={
-  attente:{label:'En attente',color:'#d29922',bg:'rgba(210,153,34,0.12)'},
-  retard:{label:'En retard',color:'#f85149',bg:'rgba(248,81,73,0.12)'},
-  relancee:{label:'Relancée',color:'#79c0ff',bg:'rgba(121,192,255,0.12)'},
-  payee:{label:'Payée',color:'#3fb950',bg:'rgba(63,185,80,0.12)'},
+  attente:{label:'En attente',color:'#b45309',bg:'#fef3c7'},
+  retard:{label:'En retard',color:'#dc2626',bg:'#fee2e2'},
+  relancee:{label:'Relancée',color:'#1D4ED8',bg:'#dbeafe'},
+  payee:{label:'Payée',color:'#15803d',bg:'#dcfce7'},
 };
 
 // ── UI PRIMITIVES ─────────────────────────────────────────
@@ -537,26 +537,29 @@ function App(){
   return(
     <div style={{display:'flex',height:'100vh',background:T.bg,color:T.text,overflow:'hidden',fontSize:'14px'}}>
       <style>{`*{box-sizing:border-box} input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.6)}`}</style>
-      <aside style={{width:'210px',flexShrink:0,background:T.bg2,borderRight:`1px solid ${T.bd}`,display:'flex',flexDirection:'column'}}>
-        <div style={{padding:'1.25rem',borderBottom:`1px solid ${T.bd}`}}>
-          <div style={{fontSize:'22px',fontWeight:900,color:T.white,letterSpacing:'-1px'}}>ferply<span style={{color:T.teal}}>.</span></div>
-          <div style={{fontSize:'11px',color:T.muted,marginTop:'2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{session.user.email}</div>
+      <aside style={{width:'220px',flexShrink:0,background:T.sidebar,borderRight:`1px solid rgba(255,255,255,0.08)`,display:'flex',flexDirection:'column'}}>
+        <div style={{padding:'1.5rem',borderBottom:`1px solid rgba(255,255,255,0.08)`}}>
+          <div style={{fontSize:'26px',fontWeight:400,color:'#ffffff',letterSpacing:'-1px',fontFamily:"Georgia,'Times New Roman',serif"}}>
+            <span style={{fontWeight:700}}>F</span>erply<span style={{color:'#93c5fd',fontWeight:700}}>.</span>
+          </div>
+          <div style={{width:'60px',height:'1.5px',background:'#93c5fd',opacity:0.4,marginTop:'4px'}}/>
+          <div style={{fontSize:'11px',color:'#94a3b8',marginTop:'6px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{session.user.email}</div>
         </div>
         <nav style={{padding:'1rem 0',flex:1}}>
           {nav.map(n=>(
-            <button key={n.id} onClick={()=>setView(n.id)} style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 1.25rem',width:'100%',background:view===n.id?'rgba(29,158,117,0.1)':'transparent',borderLeft:`3px solid ${view===n.id?T.teal:'transparent'}`,border:'none',borderRight:'none',color:view===n.id?T.teal:T.muted,fontSize:'14px',fontWeight:view===n.id?600:400,cursor:'pointer',textAlign:'left'}}>
+            <button key={n.id} onClick={()=>setView(n.id)} style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 1.25rem',width:'100%',background:view===n.id?'rgba(255,255,255,0.1)':'transparent',borderLeft:`3px solid ${view===n.id?'#93c5fd':'transparent'}`,border:'none',borderRight:'none',color:view===n.id?'#ffffff':'#94a3b8',fontSize:'14px',fontWeight:view===n.id?600:400,cursor:'pointer',textAlign:'left',transition:'all .15s'}}>
               <span style={{fontSize:'16px',flexShrink:0}}>{n.icon}</span>
               <span style={{flex:1}}>{n.label}</span>
-              {n.badge&&<span style={{background:`${n.bc}22`,color:n.bc,fontSize:'11px',fontWeight:700,padding:'2px 7px',borderRadius:'100px'}}>{n.badge}</span>}
+              {n.badge&&<span style={{background:'rgba(220,38,38,0.25)',color:'#fca5a5',fontSize:'11px',fontWeight:700,padding:'2px 7px',borderRadius:'100px'}}>{n.badge}</span>}
             </button>
           ))}
         </nav>
-        <div style={{padding:'1rem 1.25rem',borderTop:`1px solid ${T.bd}`}}>
-          <div style={{fontSize:'12px',color:T.muted,marginBottom:'10px'}}>
-            <div style={{color:'#3fb950',marginBottom:'3px'}}>🔒 Connexion sécurisée</div>
-            <div>{clients.length} clients · {factures.length} factures</div>
+        <div style={{padding:'1rem 1.25rem',borderTop:`1px solid rgba(255,255,255,0.08)`}}>
+          <div style={{fontSize:'12px',color:'#64748b',marginBottom:'10px'}}>
+            <div style={{color:'#86efac',marginBottom:'3px'}}>🔒 Connexion sécurisée</div>
+            <div style={{color:'#94a3b8'}}>{clients.length} clients · {factures.length} factures</div>
           </div>
-          <Btn onClick={logout} variant="outline" full style={{fontSize:'12px',padding:'7px'}}>Se déconnecter</Btn>
+          <Btn onClick={logout} variant="outline" full style={{fontSize:'12px',padding:'7px',borderColor:'rgba(255,255,255,0.15)',color:'#94a3b8'}}>Se déconnecter</Btn>
         </div>
       </aside>
       <main style={{flex:1,overflow:'auto',padding:'2rem',background:T.bg}}>
