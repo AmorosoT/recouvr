@@ -759,6 +759,10 @@ function App(){
   const toast=(msg,type='success')=>setToastData({msg,type,key:uid()});
 
   useEffect(()=>{
+    // Nettoyer l'URL si elle contient une erreur Supabase
+    if(window.location.hash.includes('error=')){
+      window.history.replaceState(null,'',window.location.pathname);
+    }
     sb.auth.getSession().then(({data:{session}})=>{setSession(session);setLoading(false);});
     const{data:{subscription}}=sb.auth.onAuthStateChange((_,session)=>{setSession(session);if(!session){setClients([]);setFactures([]);}});
     return()=>subscription.unsubscribe();
