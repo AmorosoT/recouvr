@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#EEF2F7;color:#0f172a}
@@ -290,6 +291,7 @@ function Dashboard({clients,factures,setView}){
 function Factures({user,clients,factures,setFactures,setView,toast}){
   const [filter,setFilter]=useState('tous');
   const [search,setSearch]=useState('');
+  const [showImportF,setShowImportF]=useState(false);
   const [showAdd,setShowAdd]=useState(false);
   const [form,setForm]=useState({num:'',client_id:'',montant:'',emission:'',echeance:'',statut:'attente'});
   const [errs,setErrs]=useState({});
@@ -318,7 +320,10 @@ function Factures({user,clients,factures,setFactures,setView,toast}){
           <h2 style={{color:C.textPrimary,fontSize:'1.5rem',fontWeight:800,margin:0}}>Factures</h2>
           <p style={{color:C.textSecondary,fontSize:'14px',marginTop:'4px'}}>{factures.length} facture(s) au total</p>
         </div>
-        <Btn onClick={()=>setShowAdd(true)}>+ Nouvelle facture</Btn>
+        <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+          <Btn onClick={()=>setShowImportF(true)} variant="outline">⬆ Importer</Btn>
+          <Btn onClick={()=>setShowAdd(true)}>+ Nouvelle facture</Btn>
+        </div>
       </div>
       <div style={{display:'flex',gap:'6px',marginBottom:'1rem',flexWrap:'wrap',alignItems:'center'}}>
         {[['tous','Toutes'],['attente','En attente'],['retard','En retard'],['relancee','Relancées'],['payee','Payées']].map(([k,l])=>(
@@ -362,6 +367,8 @@ function Factures({user,clients,factures,setFactures,setView,toast}){
           </table>
         </div>
       </div>
+      {showImport&&<ImportModal type="clients" user={user} clients={clients} setClients={setClients} setFactures={setFactures} toast={toast} onClose={()=>setShowImport(false)}/>}
+      {showImportF&&<ImportModal type="factures" user={user} clients={clients} setClients={setClients} setFactures={setFactures} toast={toast} onClose={()=>setShowImportF(false)}/>}
       {showAdd&&(
         <Modal title="Nouvelle facture" onClose={()=>{setShowAdd(false);setErrs({});}}>
           <Input label="Numéro *" placeholder="FAC-2024-001" value={form.num} error={errs.num} onChange={e=>setForm({...form,num:e.target.value})}/>
@@ -434,8 +441,9 @@ function Relances({clients,factures,setFactures,toast}){
 }
 
 /* ── CLIENTS ─────────────────────────────────────────────── */
-function Clients({user,clients,setClients,factures,toast}){
+function Clients({user,clients,setClients,factures,setFactures,toast}){
   const [showAdd,setShowAdd]=useState(false);
+  const [showImport,setShowImport]=useState(false);
   const [form,setForm]=useState({nom:'',email:'',tel:''});
   const [errs,setErrs]=useState({});
   const [saving,setSaving]=useState(false);
@@ -460,7 +468,10 @@ function Clients({user,clients,setClients,factures,toast}){
           <h2 style={{color:C.textPrimary,fontSize:'1.5rem',fontWeight:800,margin:0}}>Clients</h2>
           <p style={{color:C.textSecondary,fontSize:'14px',marginTop:'4px'}}>{clients.length} client(s) dans votre base</p>
         </div>
-        <Btn onClick={()=>setShowAdd(true)}>+ Nouveau client</Btn>
+        <div style={{display:'flex',gap:'8px'}}>
+          <Btn onClick={()=>setShowImport(true)} variant="outline">⬆ Importer</Btn>
+          <Btn onClick={()=>setShowAdd(true)}>+ Nouveau client</Btn>
+        </div>
       </div>
       {!clients.length&&(
         <div style={{textAlign:'center',padding:'4rem',background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
@@ -504,7 +515,194 @@ function Clients({user,clients,setClients,factures,toast}){
   );
 }
 
-/* ── PARAMÈTRES ─────────────────────────────────────────── */
+/* ── IMPORT MODAL ────────────────────────────────────────── */
+function ImportModal({type,user,clients,setClients,setFactures,toast,onClose}){
+  const [tab,setTab]=useState('excel');
+  const [sheetsUrl,setSheetsUrl]=useState('');
+  const [preview,setPreview]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [importing,setImporting]=useState(false);
+  const fileRef=React.useRef();
+
+  const norm=k=>k.toLowerCase().replace(/[éèêë]/g,'e').replace(/[àâä]/g,'a').replace(/[^a-z0-9]/g,'');
+  const get=(row,aliases)=>{const keys=Object.keys(row);for(const a of aliases){const k=keys.find(k2=>norm(k2)===a||norm(k2).includes(a));if(k&&row[k]!==null&&row[k]!==undefined&&String(row[k]).trim())return String(row[k]).trim();}return '';};
+
+  const parseRows=(rows)=>{
+    if(type==='clients'){
+      return rows.map(r=>({
+        nom:get(r,['nom','name','société','societe','raison','client','company']),
+        email:get(r,['email','mail','courriel']),
+        tel:get(r,['tel','telephone','téléphone','phone','portable']),
+      })).filter(r=>r.nom&&r.email&&r.email.includes('@'));
+    } else {
+      return rows.map(r=>{
+        const nomClient=get(r,['client','société','societe','nom','company']);
+        const client=nomClient?clients.find(c=>c.nom.toLowerCase().includes(nomClient.toLowerCase().slice(0,4)))||null:null;
+        const mStr=get(r,['montant','amount','total','prix','ht','ttc']);
+        const montant=parseFloat(mStr.replace(/[^0-9.,]/g,'').replace(',','.'))||0;
+        if(!montant)return null;
+        return{
+          num:get(r,['numero','numéro','facture','ref','invoice','n'])||`IMP-${uid()}`,
+          client_id:client?.id||'',
+          montant,
+          emission:get(r,['emission','date','issued'])||new Date().toISOString().slice(0,10),
+          echeance:get(r,['echeance','échéance','due','deadline'])||'',
+          statut:'attente',
+          user_id:user.id,
+        };
+      }).filter(Boolean);
+    }
+  };
+
+  const handleFile=async(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    setLoading(true);
+    try{
+      const isExcel=file.name.endsWith('.xlsx')||file.name.endsWith('.xls');
+      if(isExcel){
+        const buf=await file.arrayBuffer();
+        const wb=XLSX.read(buf);
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+        setPreview(parseRows(rows));
+      } else {
+        const text=await file.text();
+        const sep=text.includes(';')?';':',';
+        const parsed=Papa.parse(text,{header:true,skipEmptyLines:true,delimiter:sep,dynamicTyping:false});
+        setPreview(parseRows(parsed.data));
+      }
+    }catch(e){toast('✕ Erreur de lecture du fichier','error');}
+    setLoading(false);
+  };
+
+  const handleSheets=async()=>{
+    if(!sheetsUrl){toast('Entrez une URL Google Sheets','error');return;}
+    setLoading(true);
+    try{
+      let url=sheetsUrl;
+      if(!url.includes('output=csv')){
+        const m=url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if(m)url=`https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv`;
+        else throw new Error('URL invalide');
+      }
+      const res=await fetch(url);
+      if(!res.ok)throw new Error('Fichier inaccessible — vérifiez que le partage est public');
+      const text=await res.text();
+      const parsed=Papa.parse(text,{header:true,skipEmptyLines:true,dynamicTyping:false});
+      setPreview(parseRows(parsed.data));
+    }catch(e){toast('✕ '+e.message,'error');}
+    setLoading(false);
+  };
+
+  const confirmImport=async()=>{
+    if(!preview?.length)return;
+    setImporting(true);
+    try{
+      if(type==='clients'){
+        const existing=new Set(clients.map(c=>c.email));
+        const news=preview.filter(c=>!existing.has(c.email)).map(c=>({...c,user_id:user.id}));
+        if(news.length){
+          const{data,error}=await sb.from('clients').insert(news).select();
+          if(error)throw error;
+          setClients(p=>[...p,...data]);
+          toast(`✓ ${data.length} client(s) importé(s)`);
+        } else {toast('ℹ Tous les contacts existent déjà','info');}
+      } else {
+        const existing=new Set([]);
+        const news=preview.filter(f=>f.montant>0);
+        if(news.length){
+          const{data,error}=await sb.from('factures').insert(news).select();
+          if(error)throw error;
+          setFactures(p=>[...data,...p]);
+          toast(`✓ ${data.length} facture(s) importée(s)`);
+        }
+      }
+      onClose();
+    }catch(e){toast('✕ Erreur : '+e.message,'error');}
+    setImporting(false);
+  };
+
+  const isClient=type==='clients';
+  const cols=isClient?['Nom','Email','Téléphone']:['N° Facture','Client','Montant','Échéance'];
+
+  return(
+    <Modal title={`Importer des ${isClient?'clients':'factures'}`} onClose={onClose} width={600}>
+      {/* Tabs */}
+      <div style={{display:'flex',gap:'4px',background:C.pageBg,borderRadius:'8px',padding:'4px',marginBottom:'1.5rem'}}>
+        {[['excel','📊 Excel / CSV'],['sheets','🔗 Google Sheets']].map(([k,l])=>(
+          <button key={k} onClick={()=>{setTab(k);setPreview(null);}} style={{flex:1,padding:'9px',borderRadius:'6px',border:'none',fontSize:'13px',fontWeight:600,cursor:'pointer',background:tab===k?C.blue:'transparent',color:tab===k?'#fff':C.textSecondary,transition:'all .15s'}}>{l}</button>
+        ))}
+      </div>
+
+      {tab==='excel'?(
+        <div>
+          <div style={{border:`2px dashed ${C.border}`,borderRadius:'10px',padding:'2rem',textAlign:'center',marginBottom:'1rem',cursor:'pointer',background:C.pageBg}} onClick={()=>fileRef.current.click()}>
+            <div style={{fontSize:'2rem',marginBottom:'8px'}}>📂</div>
+            <div style={{color:C.textPrimary,fontWeight:600,marginBottom:'4px'}}>Glissez votre fichier ici ou cliquez pour parcourir</div>
+            <div style={{color:C.textMuted,fontSize:'13px'}}>Formats acceptés : .xlsx, .xls, .csv</div>
+            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{display:'none'}}/>
+          </div>
+          <div style={{background:C.pageBg,borderRadius:'8px',padding:'12px',fontSize:'12px',color:C.textSecondary,marginBottom:'1rem'}}>
+            <strong style={{color:C.textPrimary}}>Colonnes attendues {isClient?'(clients)':'(factures)'} :</strong><br/>
+            {isClient?'nom, email, tel':'numero, client, montant, emission, echeance'}
+          </div>
+        </div>
+      ):(
+        <div>
+          <p style={{color:C.textSecondary,fontSize:'13px',marginBottom:'12px',lineHeight:1.6}}>
+            Dans Google Sheets → <strong>Fichier → Partager → Publier sur le web</strong> → format CSV → copier l'URL
+          </p>
+          <div style={{display:'flex',gap:'8px',marginBottom:'1rem'}}>
+            <input value={sheetsUrl} onChange={e=>setSheetsUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." style={{flex:1,padding:'9px 12px',background:C.inputBg,border:`1.5px solid ${C.border}`,borderRadius:'8px',color:C.textPrimary,fontSize:'13px',outline:'none'}}/>
+            <Btn onClick={handleSheets} loading={loading}>Analyser</Btn>
+          </div>
+        </div>
+      )}
+
+      {loading&&<div style={{textAlign:'center',padding:'1rem',color:C.textSecondary}}>⏳ Analyse en cours...</div>}
+
+      {preview&&preview.length>0&&(
+        <div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+            <div style={{color:C.green,fontWeight:700,fontSize:'14px'}}>✓ {preview.length} {isClient?'contact(s)':'facture(s)'} détecté(s)</div>
+            {!isClient&&preview.filter(f=>!f.client_id).length>0&&<div style={{color:C.amber,fontSize:'12px'}}>⚠ {preview.filter(f=>!f.client_id).length} client(s) non trouvé(s)</div>}
+          </div>
+          <div style={{border:`1px solid ${C.border}`,borderRadius:'8px',overflow:'hidden',maxHeight:'200px',overflowY:'auto'}}>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:'13px'}}>
+              <thead><tr style={{background:'#F8FAFC'}}>{cols.map(h=><th key={h} style={{padding:'8px 12px',textAlign:'left',color:C.textSecondary,fontWeight:600,fontSize:'11px',textTransform:'uppercase'}}>{h}</th>)}</tr></thead>
+              <tbody>
+                {preview.slice(0,10).map((r,i)=>(
+                  <tr key={i} style={{borderTop:`1px solid ${C.border}`,background:i%2===0?'#fff':'#FAFBFD'}}>
+                    {isClient?(
+                      <><td style={{padding:'7px 12px',color:C.textPrimary,fontWeight:500}}>{r.nom}</td><td style={{padding:'7px 12px',color:C.blue}}>{r.email}</td><td style={{padding:'7px 12px',color:C.textSecondary}}>{r.tel||'—'}</td></>
+                    ):(
+                      <><td style={{padding:'7px 12px',fontFamily:'monospace',fontSize:'12px',color:C.textSecondary}}>{r.num}</td><td style={{padding:'7px 12px',color:r.client_id?C.textPrimary:C.amber}}>{r.client_id?clients.find(c=>c.id===r.client_id)?.nom:'Non trouvé'}</td><td style={{padding:'7px 12px',fontWeight:700,color:C.textPrimary}}>{r.montant?fmtEur(r.montant):'—'}</td><td style={{padding:'7px 12px',color:C.textSecondary}}>{fmtDate(r.echeance)}</td></>
+                    )}
+                  </tr>
+                ))}
+                {preview.length>10&&<tr><td colSpan={cols.length} style={{padding:'7px 12px',textAlign:'center',color:C.textMuted,fontSize:'12px'}}>... et {preview.length-10} autres</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {preview&&preview.length===0&&(
+        <div style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:'8px',padding:'12px',color:C.red,fontSize:'13px'}}>
+          ⚠ Aucune donnée valide détectée — vérifiez les noms de colonnes
+        </div>
+      )}
+
+      <div style={{display:'flex',justifyContent:'flex-end',gap:'8px',marginTop:'1.5rem'}}>
+        <Btn onClick={onClose} variant="outline">Annuler</Btn>
+        {preview?.length>0&&<Btn onClick={confirmImport} loading={importing}>⬆ Importer {preview.length} {isClient?'contact(s)':'facture(s)'}</Btn>}
+      </div>
+    </Modal>
+  );
+}
+
+
 function Parametres({user,toast}){
   const [settings,setSettings]=useState({serviceId:'',templateId:'',publicKey:'',companyName:''});
   const [saved,setSaved]=useState(false);
