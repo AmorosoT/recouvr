@@ -11,62 +11,107 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#EEF2F7;color:#0f172a}
   ::-webkit-scrollbar{width:6px;height:6px}
-  ::-webkit-scrollbar-track{background:#161b22}
-  ::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
-  input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.6)}
+  ::-webkit-scrollbar-track{background:#E2E8F0}
+  ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}
+  input[type=date]::-webkit-calendar-picker-indicator{filter:none}
   textarea{resize:vertical}
+  input,select,textarea{color:#0f172a !important}
+  input::placeholder{color:#94a3b8 !important}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useEffect,useRef}=React;
+const {useState,useEffect}=React;
 
-// ── SUPABASE ──────────────────────────────────────────────
 const SUPA_URL='https://lhwmhrswmilmkifgwmnk.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxod21ocnN3bWlsbWtpZmd3bW5rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODAxNjQsImV4cCI6MjA5NDI1NjE2NH0.fK2nlsddJqkn-zvii5bnz0mQiPggdWoX7SXvu6UI7po';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 
-// ── CONSTANTS ─────────────────────────────────────────────
 const fmtEur=n=>new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n);
 const fmtDate=d=>d?new Date(d).toLocaleDateString('fr-FR'):'—';
 const daysDiff=d=>Math.round((Date.now()-new Date(d))/864e5);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 const now=new Date();
 
-const T={bg:'#F8FAFF',bg2:'#FFFFFF',bg3:'#F1F5F9',bd:'#E2E8F0',text:'#0f172a',muted:'#64748b',teal:'#1D4ED8',white:'#fff',r8:'8px',r12:'12px',sidebar:'#1e3a5f',sidebarText:'#cbd5e1',sidebarActive:'rgba(255,255,255,0.1)'};
-const STATUTS={
-  attente:{label:'En attente',color:'#b45309',bg:'#fef3c7'},
-  retard:{label:'En retard',color:'#dc2626',bg:'#fee2e2'},
-  relancee:{label:'Relancée',color:'#1D4ED8',bg:'#dbeafe'},
-  payee:{label:'Payée',color:'#15803d',bg:'#dcfce7'},
+/* PALETTE — tout vérifié */
+const C={
+  /* Fond */
+  pageBg:'#EEF2F7',      /* fond général gris bleuté doux */
+  cardBg:'#FFFFFF',      /* cartes blanches */
+  inputBg:'#F8FAFC',     /* champs de saisie */
+  /* Textes sur fond clair */
+  textPrimary:'#0f172a', /* texte principal — quasi noir */
+  textSecondary:'#475569',/* texte secondaire — gris foncé */
+  textMuted:'#94a3b8',   /* texte discret */
+  /* Bleu marine */
+  blue:'#1D4ED8',        /* bleu principal */
+  blueLight:'#dbeafe',   /* bleu très clair (backgrounds) */
+  blueDark:'#1e3a5f',    /* bleu marine profond (sidebar) */
+  /* Bordures */
+  border:'#E2E8F0',
+  borderDark:'#CBD5E1',
+  /* Statuts */
+  red:'#dc2626', redBg:'#fee2e2',
+  amber:'#b45309', amberBg:'#fef3c7',
+  green:'#15803d', greenBg:'#dcfce7',
+  /* Sidebar */
+  sidebarBg:'#1e3a5f',
+  sidebarText:'#cbd5e1',
+  sidebarActive:'rgba(255,255,255,0.12)',
+  sidebarBorder:'rgba(255,255,255,0.08)',
 };
 
-// ── UI PRIMITIVES ─────────────────────────────────────────
-function Badge({s}){const st=STATUTS[s]||STATUTS.attente;return <span style={{display:'inline-block',padding:'3px 10px',borderRadius:'100px',fontSize:'12px',fontWeight:600,color:st.color,background:st.bg}}>{st.label}</span>;}
+const STATUTS={
+  attente:{label:'En attente',color:C.amber,bg:C.amberBg},
+  retard: {label:'En retard', color:C.red,  bg:C.redBg},
+  relancee:{label:'Relancée', color:C.blue, bg:C.blueLight},
+  payee:  {label:'Payée',    color:C.green, bg:C.greenBg},
+};
+
+/* ── UI ─────────────────────────────────────────────────── */
+function Badge({s}){
+  const st=STATUTS[s]||STATUTS.attente;
+  return <span style={{display:'inline-block',padding:'3px 10px',borderRadius:'100px',fontSize:'12px',fontWeight:600,color:st.color,background:st.bg}}>{st.label}</span>;
+}
+
+function StatCard({label,value,sub,color}){return(
+  <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',padding:'1.25rem',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+    <div style={{fontSize:'12px',color:C.textSecondary,marginBottom:'6px',textTransform:'uppercase',letterSpacing:'.5px',fontWeight:500}}>{label}</div>
+    <div style={{fontSize:'1.8rem',fontWeight:800,color:color||C.textPrimary,letterSpacing:'-1px',lineHeight:1}}>{value}</div>
+    {sub&&<div style={{fontSize:'12px',color:C.textMuted,marginTop:'6px'}}>{sub}</div>}
+  </div>
+);}
 
 function Btn({onClick,children,variant='primary',full,disabled,loading,style:s={}}){
-  const base={padding:'9px 18px',borderRadius:T.r8,fontSize:'13px',fontWeight:600,cursor:disabled||loading?'default':'pointer',width:full?'100%':'auto',opacity:disabled||loading?0.55:1,transition:'opacity .15s',...s};
-  const v={primary:{background:T.teal,color:'#fff',border:'none'},outline:{background:'transparent',color:T.text,border:`1px solid ${T.bd}`},danger:{background:'rgba(248,81,73,0.1)',color:'#f85149',border:'1px solid rgba(248,81,73,0.2)'},success:{background:'rgba(63,185,80,0.1)',color:'#3fb950',border:'1px solid rgba(63,185,80,0.2)'},ghost:{background:'transparent',color:T.muted,border:'none'},info:{background:'rgba(121,192,255,0.1)',color:'#79c0ff',border:'1px solid rgba(121,192,255,0.2)'},red:{background:'rgba(248,81,73,0.15)',color:'#f85149',border:'1px solid rgba(248,81,73,0.3)'}};
+  const base={padding:'9px 18px',borderRadius:'8px',fontSize:'13px',fontWeight:600,cursor:disabled||loading?'default':'pointer',width:full?'100%':'auto',opacity:disabled||loading?0.55:1,transition:'all .15s',border:'none',...s};
+  const v={
+    primary:{background:C.blue,color:'#ffffff'},
+    outline:{background:'transparent',color:C.textPrimary,border:`1px solid ${C.borderDark}`},
+    danger:{background:C.redBg,color:C.red,border:`1px solid ${C.red}33`},
+    success:{background:C.greenBg,color:C.green,border:`1px solid ${C.green}33`},
+    ghost:{background:'transparent',color:C.textSecondary},
+    sidebarBtn:{background:'transparent',color:C.sidebarText,border:`1px solid rgba(255,255,255,0.2)`},
+  };
   return <button onClick={disabled||loading?undefined:onClick} style={{...base,...(v[variant]||v.primary)}}>{loading?'⏳...' : children}</button>;
 }
 
 function Input({label,error,...p}){return(
   <div style={{marginBottom:'1rem'}}>
-    {label&&<label style={{display:'block',fontSize:'13px',color:T.muted,marginBottom:'5px'}}>{label}</label>}
-    <input {...p} style={{width:'100%',padding:'9px 12px',background:T.bg3,border:`1px solid ${error?'#f85149':T.bd}`,borderRadius:T.r8,color:T.text,fontSize:'14px',outline:'none',boxSizing:'border-box',...p.style}}/>
-    {error&&<div style={{fontSize:'12px',color:'#f85149',marginTop:'4px'}}>{error}</div>}
+    {label&&<label style={{display:'block',fontSize:'13px',color:C.textSecondary,marginBottom:'5px',fontWeight:500}}>{label}</label>}
+    <input {...p} style={{width:'100%',padding:'9px 12px',background:C.inputBg,border:`1.5px solid ${error?C.red:C.border}`,borderRadius:'8px',color:C.textPrimary,fontSize:'14px',outline:'none',boxSizing:'border-box',transition:'border-color .15s',...p.style}}/>
+    {error&&<div style={{fontSize:'12px',color:C.red,marginTop:'4px'}}>{error}</div>}
   </div>
 );}
 
 function Modal({title,onClose,children,width=480}){return(
-  <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.78)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'1rem'}}>
-    <div style={{background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:'16px',padding:'2rem',width:'100%',maxWidth:width,maxHeight:'90vh',overflowY:'auto'}}>
+  <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'1rem'}}>
+    <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'16px',padding:'2rem',width:'100%',maxWidth:width,maxHeight:'90vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.15)'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem'}}>
-        <h3 style={{color:T.white,fontSize:'1.1rem',fontWeight:700,margin:0}}>{title}</h3>
-        <Btn onClick={onClose} variant="ghost" style={{fontSize:'22px',lineHeight:1,padding:'0 6px'}}>×</Btn>
+        <h3 style={{color:C.textPrimary,fontSize:'1.1rem',fontWeight:700,margin:0}}>{title}</h3>
+        <button onClick={onClose} style={{background:'none',border:'none',fontSize:'22px',cursor:'pointer',color:C.textMuted,lineHeight:1}}>×</button>
       </div>
       {children}
     </div>
@@ -75,12 +120,30 @@ function Modal({title,onClose,children,width=480}){return(
 
 function Toast({msg,type='success',onDone}){
   useEffect(()=>{const t=setTimeout(onDone,4000);return()=>clearTimeout(t);},[]);
-  const c={success:{bg:'#141e18',bd:'rgba(63,185,80,0.3)',color:'#3fb950'},error:{bg:'#1e1414',bd:'rgba(248,81,73,0.3)',color:'#f85149'},info:{bg:'#141620',bd:'rgba(121,192,255,0.3)',color:'#79c0ff'}};
+  const c={
+    success:{bg:C.greenBg,bd:`${C.green}44`,color:C.green},
+    error:{bg:C.redBg,bd:`${C.red}44`,color:C.red},
+    info:{bg:C.blueLight,bd:`${C.blue}44`,color:C.blue},
+  };
   const st=c[type]||c.success;
-  return <div style={{position:'fixed',bottom:'2rem',right:'2rem',background:st.bg,border:`1px solid ${st.bd}`,borderRadius:T.r12,padding:'12px 20px',color:st.color,fontSize:'14px',fontWeight:500,zIndex:2000,maxWidth:'380px',lineHeight:1.5}}>{msg}</div>;
+  return <div style={{position:'fixed',bottom:'2rem',right:'2rem',background:st.bg,border:`1px solid ${st.bd}`,borderRadius:'12px',padding:'12px 20px',color:st.color,fontSize:'14px',fontWeight:600,zIndex:2000,maxWidth:'380px',boxShadow:'0 4px 16px rgba(0,0,0,0.1)'}}>{msg}</div>;
 }
 
-// ── AUTH PAGE ─────────────────────────────────────────────
+/* ── LOGO ────────────────────────────────────────────────── */
+function Logo({size=32,light=false}){
+  const textColor=light?'#ffffff':C.blueDark;
+  const dotColor=light?'#93c5fd':C.blue;
+  return(
+    <div>
+      <div style={{fontSize:size,fontWeight:400,color:textColor,letterSpacing:'-1.5px',lineHeight:1,fontFamily:"Georgia,'Times New Roman',serif"}}>
+        <span style={{fontWeight:700}}>F</span>erply<span style={{color:dotColor,fontWeight:700}}>.</span>
+      </div>
+      <div style={{width:size*1.8,height:'1.5px',background:dotColor,opacity:0.35,marginTop:'3px'}}/>
+    </div>
+  );
+}
+
+/* ── AUTH PAGE ───────────────────────────────────────────── */
 function AuthPage({onAuth}){
   const [mode,setMode]=useState('login');
   const [email,setEmail]=useState('');
@@ -90,8 +153,6 @@ function AuthPage({onAuth}){
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState('');
   const [success,setSuccess]=useState('');
-
-  // Code d'invitation — tu peux le changer
   const INVITE_CODE='FERPLY2024';
 
   const handleLogin=async()=>{
@@ -104,48 +165,39 @@ function AuthPage({onAuth}){
 
   const handleSignup=async()=>{
     if(!email||!pwd||!company){setError('Tous les champs sont requis');return;}
-    if(code!==INVITE_CODE){setError('Code d\'invitation invalide. Contactez ferply pour obtenir un accès.');return;}
-    if(pwd.length<8){setError('Le mot de passe doit contenir au moins 8 caractères');return;}
+    if(code!==INVITE_CODE){setError('Code d\'invitation invalide. Contactez Ferply pour obtenir un accès.');return;}
+    if(pwd.length<8){setError('Minimum 8 caractères');return;}
     setLoading(true);setError('');
     const{data,error:e}=await sb.auth.signUp({email,password:pwd,options:{data:{company_name:company}}});
     if(e){setError(e.message);setLoading(false);return;}
-    if(data.user){
-      await sb.from('profiles').insert({id:data.user.id,email,company_name:company,invited:true});
-    }
+    if(data.user){await sb.from('profiles').insert({id:data.user.id,email,company_name:company,invited:true});}
     setSuccess('Compte créé ! Vérifiez votre email pour confirmer votre inscription.');
     setLoading(false);
   };
 
   return(
-    <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
+    <div style={{minHeight:'100vh',background:`linear-gradient(135deg, ${C.blueDark} 0%, #2d5a9e 100%)`,display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
       <div style={{width:'100%',maxWidth:'420px'}}>
-        {/* Logo */}
         <div style={{textAlign:'center',marginBottom:'2.5rem'}}>
-          <div style={{fontSize:'38px',fontWeight:900,color:T.white,letterSpacing:'-2px',marginBottom:'8px'}}>
-            <span style={{color:T.teal}}>F</span>erply<span style={{color:T.teal}}>.</span>
-          </div>
-          <p style={{color:T.muted,fontSize:'15px'}}>La trésorerie, enfin sous contrôle.</p>
+          <Logo size={38} light={true}/>
+          <div style={{marginTop:'12px'}}/>
+          <p style={{color:'#94a3b8',fontSize:'15px',marginTop:'8px'}}>La trésorerie, enfin sous contrôle.</p>
         </div>
-
-        {/* Card */}
-        <div style={{background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:'16px',padding:'2rem'}}>
-          {/* Tabs */}
-          <div style={{display:'flex',gap:'4px',background:T.bg3,borderRadius:T.r8,padding:'4px',marginBottom:'1.5rem'}}>
+        <div style={{background:C.cardBg,borderRadius:'16px',padding:'2rem',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+          <div style={{display:'flex',gap:'4px',background:C.pageBg,borderRadius:'8px',padding:'4px',marginBottom:'1.5rem'}}>
             {[['login','Connexion'],['signup','Créer un compte']].map(([m,l])=>(
-              <button key={m} onClick={()=>{setMode(m);setError('');setSuccess('');}} style={{flex:1,padding:'8px',borderRadius:'6px',border:'none',fontSize:'13px',fontWeight:500,cursor:'pointer',background:mode===m?T.bg2:'transparent',color:mode===m?T.white:T.muted,transition:'all .15s'}}>{l}</button>
+              <button key={m} onClick={()=>{setMode(m);setError('');setSuccess('');}} style={{flex:1,padding:'9px',borderRadius:'6px',border:'none',fontSize:'13px',fontWeight:600,cursor:'pointer',background:mode===m?C.blue:'transparent',color:mode===m?'#ffffff':C.textSecondary,transition:'all .15s'}}>{l}</button>
             ))}
           </div>
-
-          {error&&<div style={{background:'rgba(248,81,73,0.08)',border:'1px solid rgba(248,81,73,0.2)',borderRadius:T.r8,padding:'10px 14px',color:'#f85149',fontSize:'13px',marginBottom:'1rem'}}>{error}</div>}
-          {success&&<div style={{background:'rgba(63,185,80,0.08)',border:'1px solid rgba(63,185,80,0.2)',borderRadius:T.r8,padding:'10px 14px',color:'#3fb950',fontSize:'13px',marginBottom:'1rem'}}>{success}</div>}
-
+          {error&&<div style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:'8px',padding:'10px 14px',color:C.red,fontSize:'13px',marginBottom:'1rem',fontWeight:500}}>{error}</div>}
+          {success&&<div style={{background:C.greenBg,border:`1px solid ${C.green}33`,borderRadius:'8px',padding:'10px 14px',color:C.green,fontSize:'13px',marginBottom:'1rem',fontWeight:500}}>{success}</div>}
           {mode==='login'?(
             <>
-              <Input label="Email" type="email" placeholder="vous@entreprise.fr" value={email} onChange={e=>setEmail(e.target.value)}/>
+              <Input label="Email professionnel" type="email" placeholder="vous@entreprise.fr" value={email} onChange={e=>setEmail(e.target.value)}/>
               <Input label="Mot de passe" type="password" placeholder="••••••••" value={pwd} onChange={e=>setPwd(e.target.value)}/>
-              <Btn onClick={handleLogin} loading={loading} full style={{marginTop:'8px'}}>Se connecter</Btn>
-              <p style={{fontSize:'12px',color:T.muted,textAlign:'center',marginTop:'1rem'}}>
-                Pas encore de compte ? <span onClick={()=>setMode('signup')} style={{color:T.teal,cursor:'pointer'}}>Demandez un accès</span>
+              <Btn onClick={handleLogin} loading={loading} full style={{marginTop:'8px',padding:'12px'}}>Se connecter →</Btn>
+              <p style={{fontSize:'12px',color:C.textMuted,textAlign:'center',marginTop:'1rem'}}>
+                Pas encore de compte ? <span onClick={()=>setMode('signup')} style={{color:C.blue,cursor:'pointer',fontWeight:600}}>Demandez un accès</span>
               </p>
             </>
           ):(
@@ -154,17 +206,16 @@ function AuthPage({onAuth}){
               <Input label="Email professionnel *" type="email" placeholder="vous@entreprise.fr" value={email} onChange={e=>setEmail(e.target.value)}/>
               <Input label="Mot de passe *" type="password" placeholder="8 caractères minimum" value={pwd} onChange={e=>setPwd(e.target.value)}/>
               <div style={{marginBottom:'1rem'}}>
-                <label style={{display:'block',fontSize:'13px',color:T.muted,marginBottom:'5px'}}>Code d'invitation *</label>
-                <input type="text" placeholder="Entrez votre code d'accès" value={code} onChange={e=>setCode(e.target.value.toUpperCase())} style={{width:'100%',padding:'9px 12px',background:T.bg3,border:`1px solid ${T.bd}`,borderRadius:T.r8,color:T.teal,fontSize:'14px',outline:'none',fontFamily:'monospace',letterSpacing:'2px',boxSizing:'border-box'}}/>
-                <div style={{fontSize:'11px',color:T.muted,marginTop:'4px'}}>Contactez-nous sur ferply.io pour obtenir votre code d'accès</div>
+                <label style={{display:'block',fontSize:'13px',color:C.textSecondary,marginBottom:'5px',fontWeight:500}}>Code d'invitation *</label>
+                <input type="text" placeholder="Votre code d'accès" value={code} onChange={e=>setCode(e.target.value.toUpperCase())}
+                  style={{width:'100%',padding:'9px 12px',background:C.inputBg,border:`1.5px solid ${C.border}`,borderRadius:'8px',color:C.blue,fontSize:'14px',outline:'none',fontFamily:'monospace',letterSpacing:'2px',boxSizing:'border-box',fontWeight:700}}/>
+                <div style={{fontSize:'11px',color:C.textMuted,marginTop:'4px'}}>Contactez-nous sur ferply.io pour obtenir votre code</div>
               </div>
-              <Btn onClick={handleSignup} loading={loading} full style={{marginTop:'8px'}}>Créer mon compte</Btn>
+              <Btn onClick={handleSignup} loading={loading} full style={{padding:'12px'}}>Créer mon compte →</Btn>
             </>
           )}
         </div>
-
-        {/* Footer */}
-        <p style={{textAlign:'center',fontSize:'12px',color:T.muted,marginTop:'1.5rem'}}>
+        <p style={{textAlign:'center',fontSize:'12px',color:'#64748b',marginTop:'1.5rem'}}>
           🔒 Données hébergées en Europe · Conformité RGPD · Chiffrement SSL
         </p>
       </div>
@@ -172,16 +223,7 @@ function AuthPage({onAuth}){
   );
 }
 
-// ── STAT CARD ─────────────────────────────────────────────
-function StatCard({label,value,sub,color}){return(
-  <div style={{background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:T.r12,padding:'1.25rem'}}>
-    <div style={{fontSize:'12px',color:T.muted,marginBottom:'6px',textTransform:'uppercase',letterSpacing:'.5px'}}>{label}</div>
-    <div style={{fontSize:'1.8rem',fontWeight:800,color:color||T.white,letterSpacing:'-1px',lineHeight:1}}>{value}</div>
-    {sub&&<div style={{fontSize:'12px',color:T.muted,marginTop:'6px'}}>{sub}</div>}
-  </div>
-);}
-
-// ── DASHBOARD ─────────────────────────────────────────────
+/* ── DASHBOARD ───────────────────────────────────────────── */
 function Dashboard({clients,factures,setView}){
   const actives=factures.filter(f=>f.statut!=='payee');
   const retardF=factures.filter(f=>f.statut==='retard');
@@ -190,44 +232,50 @@ function Dashboard({clients,factures,setView}){
   return(
     <div>
       <div style={{marginBottom:'1.5rem'}}>
-        <h2 style={{color:T.white,fontSize:'1.5rem',fontWeight:800,margin:0,letterSpacing:'-0.5px'}}>Tableau de bord</h2>
-        <p style={{color:T.muted,fontSize:'14px',marginTop:'4px'}}>{now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
+        <h2 style={{color:C.textPrimary,fontSize:'1.5rem',fontWeight:800,margin:0}}>Tableau de bord</h2>
+        <p style={{color:C.textSecondary,fontSize:'14px',marginTop:'4px'}}>{now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'1rem',marginBottom:'2rem'}}>
         <StatCard label="Total à encaisser" value={fmtEur(actives.reduce((s,f)=>s+f.montant,0))} sub={`${actives.length} factures actives`}/>
-        <StatCard label="En retard" value={fmtEur(retardF.reduce((s,f)=>s+f.montant,0))} color="#f85149" sub={`${retardF.length} facture(s)`}/>
-        <StatCard label="Déjà encaissé" value={fmtEur(factures.filter(f=>f.statut==='payee').reduce((s,f)=>s+f.montant,0))} color="#3fb950"/>
+        <StatCard label="En retard" value={fmtEur(retardF.reduce((s,f)=>s+f.montant,0))} color={C.red} sub={`${retardF.length} facture(s)`}/>
+        <StatCard label="Déjà encaissé" value={fmtEur(factures.filter(f=>f.statut==='payee').reduce((s,f)=>s+f.montant,0))} color={C.green}/>
         <StatCard label="Clients actifs" value={clients.length}/>
       </div>
       {retardF.length>0&&(
-        <div style={{background:'rgba(248,81,73,0.07)',border:'1px solid rgba(248,81,73,0.2)',borderRadius:T.r12,padding:'1rem 1.25rem',marginBottom:'1.5rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'1rem'}}>
+        <div style={{background:C.redBg,border:`1px solid ${C.red}33`,borderRadius:'12px',padding:'1rem 1.25rem',marginBottom:'1.5rem',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'1rem'}}>
           <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
             <span>⚠️</span>
             <div>
-              <div style={{color:'#f85149',fontWeight:600,fontSize:'14px'}}>{retardF.length} facture(s) en retard</div>
-              <div style={{color:T.muted,fontSize:'13px'}}>{fmtEur(retardF.reduce((s,f)=>s+f.montant,0))} à recouvrer</div>
+              <div style={{color:C.red,fontWeight:700,fontSize:'14px'}}>{retardF.length} facture(s) en retard</div>
+              <div style={{color:C.textSecondary,fontSize:'13px'}}>{fmtEur(retardF.reduce((s,f)=>s+f.montant,0))} à recouvrer</div>
             </div>
           </div>
-          <Btn onClick={()=>setView('relances')} variant="danger" style={{fontSize:'13px'}}>Gérer les relances →</Btn>
+          <Btn onClick={()=>setView('relances')} variant="danger" style={{fontSize:'13px'}}>Gérer →</Btn>
         </div>
       )}
-      <div style={{background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:T.r12,overflow:'hidden'}}>
-        <div style={{padding:'1rem 1.25rem',borderBottom:`1px solid ${T.bd}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <h3 style={{color:T.white,fontWeight:600,fontSize:'15px',margin:0}}>Factures récentes</h3>
-          <Btn onClick={()=>setView('factures')} variant="ghost" style={{fontSize:'13px',color:T.teal}}>Voir tout →</Btn>
+      <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',overflow:'hidden',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+        <div style={{padding:'1rem 1.25rem',borderBottom:`1px solid ${C.border}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <h3 style={{color:C.textPrimary,fontWeight:700,fontSize:'15px',margin:0}}>Factures récentes</h3>
+          <Btn onClick={()=>setView('factures')} variant="ghost" style={{fontSize:'13px',color:C.blue}}>Voir tout →</Btn>
         </div>
         <div style={{overflowX:'auto'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:'14px'}}>
-            <thead><tr style={{borderBottom:`1px solid ${T.bd}`}}>{['Numéro','Client','Montant','Échéance','Statut'].map(h=><th key={h} style={{padding:'9px 16px',textAlign:'left',color:T.muted,fontWeight:500,fontSize:'12px'}}>{h}</th>)}</tr></thead>
+            <thead>
+              <tr style={{background:'#F8FAFC',borderBottom:`1px solid ${C.border}`}}>
+                {['Numéro','Client','Montant','Échéance','Statut'].map(h=>(
+                  <th key={h} style={{padding:'10px 16px',textAlign:'left',color:C.textSecondary,fontWeight:600,fontSize:'12px',textTransform:'uppercase',letterSpacing:'.5px'}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
             <tbody>
-              {!recentes.length&&<tr><td colSpan={5} style={{padding:'2rem',textAlign:'center',color:T.muted}}>Aucune facture pour l'instant</td></tr>}
-              {recentes.map(f=>(
-                <tr key={f.id} style={{borderBottom:`1px solid rgba(48,54,61,0.4)`}}>
-                  <td style={{padding:'11px 16px',color:T.text,fontFamily:'monospace',fontSize:'12px'}}>{f.num}</td>
-                  <td style={{padding:'11px 16px',color:T.text}}>{getC(f.client_id)?.nom||'—'}</td>
-                  <td style={{padding:'11px 16px',color:T.white,fontWeight:700}}>{fmtEur(f.montant)}</td>
-                  <td style={{padding:'11px 16px',color:f.statut==='retard'?'#f85149':T.muted,fontSize:'13px'}}>{fmtDate(f.echeance)}</td>
-                  <td style={{padding:'11px 16px'}}><Badge s={f.statut}/></td>
+              {!recentes.length&&<tr><td colSpan={5} style={{padding:'3rem',textAlign:'center',color:C.textMuted}}>Aucune facture pour l'instant</td></tr>}
+              {recentes.map((f,i)=>(
+                <tr key={f.id} style={{borderBottom:`1px solid ${C.border}`,background:i%2===0?C.cardBg:'#FAFBFD'}}>
+                  <td style={{padding:'12px 16px',color:C.textSecondary,fontFamily:'monospace',fontSize:'12px'}}>{f.num}</td>
+                  <td style={{padding:'12px 16px',color:C.textPrimary,fontWeight:500}}>{getC(f.client_id)?.nom||'—'}</td>
+                  <td style={{padding:'12px 16px',color:C.textPrimary,fontWeight:700}}>{fmtEur(f.montant)}</td>
+                  <td style={{padding:'12px 16px',color:f.statut==='retard'?C.red:C.textSecondary,fontSize:'13px'}}>{fmtDate(f.echeance)}</td>
+                  <td style={{padding:'12px 16px'}}><Badge s={f.statut}/></td>
                 </tr>
               ))}
             </tbody>
@@ -238,7 +286,7 @@ function Dashboard({clients,factures,setView}){
   );
 }
 
-// ── FACTURES ──────────────────────────────────────────────
+/* ── FACTURES ────────────────────────────────────────────── */
 function Factures({user,clients,factures,setFactures,setView,toast}){
   const [filter,setFilter]=useState('tous');
   const [search,setSearch]=useState('');
@@ -255,59 +303,56 @@ function Factures({user,clients,factures,setFactures,setView,toast}){
   const addF=async()=>{
     if(!validate())return;
     setSaving(true);
-    const newF={num:form.num,client_id:form.client_id,montant:parseFloat(form.montant),emission:form.emission||now.toISOString().slice(0,10),echeance:form.echeance,statut:'attente',user_id:user.id};
-    const{data,error}=await sb.from('factures').insert(newF).select().single();
-    if(error){toast('✕ Erreur lors de la création','error');}
-    else{setFactures(p=>[data,...p]);toast('✓ Facture créée');}
-    setForm({num:'',client_id:'',montant:'',emission:'',echeance:'',statut:'attente'});
-    setErrs({});setShowAdd(false);setSaving(false);
+    const{data,error}=await sb.from('factures').insert({num:form.num,client_id:form.client_id,montant:parseFloat(form.montant),emission:form.emission||now.toISOString().slice(0,10),echeance:form.echeance,statut:'attente',user_id:user.id}).select().single();
+    if(error){toast('✕ Erreur','error');}else{setFactures(p=>[data,...p]);toast('✓ Facture créée');}
+    setForm({num:'',client_id:'',montant:'',emission:'',echeance:'',statut:'attente'});setErrs({});setShowAdd(false);setSaving(false);
   };
 
-  const markPaid=async id=>{
-    await sb.from('factures').update({statut:'payee'}).eq('id',id);
-    setFactures(p=>p.map(f=>f.id===id?{...f,statut:'payee'}:f));
-    toast('✓ Facture marquée payée');
-  };
-
-  const del=async id=>{
-    if(!window.confirm('Supprimer cette facture ?'))return;
-    await sb.from('factures').delete().eq('id',id);
-    setFactures(p=>p.filter(f=>f.id!==id));
-  };
+  const markPaid=async id=>{await sb.from('factures').update({statut:'payee'}).eq('id',id);setFactures(p=>p.map(f=>f.id===id?{...f,statut:'payee'}:f));toast('✓ Facture payée');};
+  const del=async id=>{if(!window.confirm('Supprimer ?'))return;await sb.from('factures').delete().eq('id',id);setFactures(p=>p.filter(f=>f.id!==id));};
 
   return(
     <div>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem',flexWrap:'wrap',gap:'1rem'}}>
-        <h2 style={{color:T.white,fontSize:'1.5rem',fontWeight:800,margin:0,letterSpacing:'-0.5px'}}>Factures</h2>
+        <div>
+          <h2 style={{color:C.textPrimary,fontSize:'1.5rem',fontWeight:800,margin:0}}>Factures</h2>
+          <p style={{color:C.textSecondary,fontSize:'14px',marginTop:'4px'}}>{factures.length} facture(s) au total</p>
+        </div>
         <Btn onClick={()=>setShowAdd(true)}>+ Nouvelle facture</Btn>
       </div>
       <div style={{display:'flex',gap:'6px',marginBottom:'1rem',flexWrap:'wrap',alignItems:'center'}}>
         {[['tous','Toutes'],['attente','En attente'],['retard','En retard'],['relancee','Relancées'],['payee','Payées']].map(([k,l])=>(
-          <button key={k} onClick={()=>setFilter(k)} style={{padding:'6px 14px',borderRadius:'100px',fontSize:'13px',fontWeight:500,cursor:'pointer',background:filter===k?T.teal:'transparent',color:filter===k?'#fff':T.muted,border:`1px solid ${filter===k?T.teal:T.bd}`}}>
+          <button key={k} onClick={()=>setFilter(k)} style={{padding:'6px 14px',borderRadius:'100px',fontSize:'13px',fontWeight:500,cursor:'pointer',background:filter===k?C.blue:C.cardBg,color:filter===k?'#ffffff':C.textSecondary,border:`1px solid ${filter===k?C.blue:C.border}`,transition:'all .15s'}}>
             {l}{k==='tous'?` (${factures.length})`:cnt(k)?` (${cnt(k)})`:null}
           </button>
         ))}
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher..." style={{marginLeft:'auto',padding:'6px 12px',borderRadius:T.r8,background:T.bg3,border:`1px solid ${T.bd}`,color:T.text,fontSize:'13px',outline:'none'}}/>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher..." style={{marginLeft:'auto',padding:'7px 12px',borderRadius:'8px',background:C.cardBg,border:`1px solid ${C.border}`,color:C.textPrimary,fontSize:'13px',outline:'none'}}/>
       </div>
-      <div style={{background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:T.r12,overflow:'hidden'}}>
+      <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',overflow:'hidden',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
         <div style={{overflowX:'auto'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:'14px'}}>
-            <thead><tr style={{borderBottom:`1px solid ${T.bd}`}}>{['Numéro','Client','Montant','Échéance','Statut','Actions'].map(h=><th key={h} style={{padding:'9px 14px',textAlign:'left',color:T.muted,fontWeight:500,fontSize:'12px'}}>{h}</th>)}</tr></thead>
+            <thead>
+              <tr style={{background:'#F8FAFC',borderBottom:`1px solid ${C.border}`}}>
+                {['Numéro','Client','Montant','Échéance','Statut','Actions'].map(h=>(
+                  <th key={h} style={{padding:'10px 14px',textAlign:'left',color:C.textSecondary,fontWeight:600,fontSize:'12px',textTransform:'uppercase',letterSpacing:'.5px'}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
             <tbody>
-              {!filtered.length&&<tr><td colSpan={6} style={{padding:'3rem',textAlign:'center',color:T.muted}}>Aucune facture</td></tr>}
-              {filtered.map(f=>(
-                <tr key={f.id} style={{borderBottom:`1px solid rgba(48,54,61,0.4)`}}>
-                  <td style={{padding:'10px 14px',fontFamily:'monospace',fontSize:'12px',color:T.text}}>{f.num}</td>
-                  <td style={{padding:'10px 14px',color:T.text,maxWidth:'140px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{getC(f.client_id)?.nom||<em style={{color:T.muted}}>—</em>}</td>
-                  <td style={{padding:'10px 14px',color:T.white,fontWeight:700}}>{fmtEur(f.montant)}</td>
-                  <td style={{padding:'10px 14px',fontSize:'13px'}}>
-                    <span style={{color:f.statut==='retard'?'#f85149':T.muted}}>{fmtDate(f.echeance)}</span>
-                    {f.statut==='retard'&&<span style={{display:'block',fontSize:'11px',color:'#f85149'}}>{daysDiff(f.echeance)}j de retard</span>}
+              {!filtered.length&&<tr><td colSpan={6} style={{padding:'3rem',textAlign:'center',color:C.textMuted}}>Aucune facture</td></tr>}
+              {filtered.map((f,i)=>(
+                <tr key={f.id} style={{borderBottom:`1px solid ${C.border}`,background:i%2===0?C.cardBg:'#FAFBFD'}}>
+                  <td style={{padding:'11px 14px',fontFamily:'monospace',fontSize:'12px',color:C.textSecondary}}>{f.num}</td>
+                  <td style={{padding:'11px 14px',color:C.textPrimary,fontWeight:500,maxWidth:'140px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{getC(f.client_id)?.nom||<em style={{color:C.textMuted}}>—</em>}</td>
+                  <td style={{padding:'11px 14px',color:C.textPrimary,fontWeight:700}}>{fmtEur(f.montant)}</td>
+                  <td style={{padding:'11px 14px',fontSize:'13px'}}>
+                    <span style={{color:f.statut==='retard'?C.red:C.textSecondary}}>{fmtDate(f.echeance)}</span>
+                    {f.statut==='retard'&&<span style={{display:'block',fontSize:'11px',color:C.red,fontWeight:600}}>{daysDiff(f.echeance)}j de retard</span>}
                   </td>
-                  <td style={{padding:'10px 14px'}}><Badge s={f.statut}/></td>
-                  <td style={{padding:'10px 14px'}}>
+                  <td style={{padding:'11px 14px'}}><Badge s={f.statut}/></td>
+                  <td style={{padding:'11px 14px'}}>
                     <div style={{display:'flex',gap:'5px'}}>
-                      {f.statut!=='payee'&&<Btn onClick={()=>markPaid(f.id)} variant="success" style={{padding:'4px 9px',fontSize:'11px'}}>✓</Btn>}
+                      {f.statut!=='payee'&&<Btn onClick={()=>markPaid(f.id)} variant="success" style={{padding:'4px 9px',fontSize:'11px'}}>✓ Payée</Btn>}
                       <Btn onClick={()=>del(f.id)} variant="danger" style={{padding:'4px 9px',fontSize:'11px'}}>✕</Btn>
                     </div>
                   </td>
@@ -321,8 +366,8 @@ function Factures({user,clients,factures,setFactures,setView,toast}){
         <Modal title="Nouvelle facture" onClose={()=>{setShowAdd(false);setErrs({});}}>
           <Input label="Numéro *" placeholder="FAC-2024-001" value={form.num} error={errs.num} onChange={e=>setForm({...form,num:e.target.value})}/>
           <div style={{marginBottom:'1rem'}}>
-            <label style={{display:'block',fontSize:'13px',color:T.muted,marginBottom:'5px'}}>Client *</label>
-            <select value={form.client_id} onChange={e=>setForm({...form,client_id:e.target.value})} style={{width:'100%',padding:'9px 12px',background:T.bg3,border:`1px solid ${errs.client_id?'#f85149':T.bd}`,borderRadius:T.r8,color:T.text,fontSize:'14px',outline:'none'}}>
+            <label style={{display:'block',fontSize:'13px',color:C.textSecondary,marginBottom:'5px',fontWeight:500}}>Client *</label>
+            <select value={form.client_id} onChange={e=>setForm({...form,client_id:e.target.value})} style={{width:'100%',padding:'9px 12px',background:C.inputBg,border:`1.5px solid ${errs.client_id?C.red:C.border}`,borderRadius:'8px',color:C.textPrimary,fontSize:'14px',outline:'none'}}>
               <option value="">— Sélectionner —</option>
               {clients.map(c=><option key={c.id} value={c.id}>{c.nom}</option>)}
             </select>
@@ -342,48 +387,37 @@ function Factures({user,clients,factures,setFactures,setView,toast}){
   );
 }
 
-// ── RELANCES ──────────────────────────────────────────────
+/* ── RELANCES ────────────────────────────────────────────── */
 function Relances({clients,factures,setFactures,toast}){
   const getC=cid=>clients.find(c=>c.id===cid);
   const urgentes=factures.filter(f=>['retard','attente','relancee'].includes(f.statut)).sort((a,b)=>new Date(a.echeance)-new Date(b.echeance));
-
-  const relancer=async id=>{
-    await sb.from('factures').update({statut:'relancee'}).eq('id',id);
-    setFactures(p=>p.map(f=>f.id===id?{...f,statut:'relancee'}:f));
-    toast('✉ Relance enregistrée');
-  };
-
-  const payer=async id=>{
-    await sb.from('factures').update({statut:'payee'}).eq('id',id);
-    setFactures(p=>p.map(f=>f.id===id?{...f,statut:'payee'}:f));
-    toast('✓ Payée');
-  };
-
+  const relancer=async id=>{await sb.from('factures').update({statut:'relancee'}).eq('id',id);setFactures(p=>p.map(f=>f.id===id?{...f,statut:'relancee'}:f));toast('✉ Relance enregistrée');};
+  const payer=async id=>{await sb.from('factures').update({statut:'payee'}).eq('id',id);setFactures(p=>p.map(f=>f.id===id?{...f,statut:'payee'}:f));toast('✓ Payée');};
   return(
     <div>
       <div style={{marginBottom:'1.5rem'}}>
-        <h2 style={{color:T.white,fontSize:'1.5rem',fontWeight:800,margin:0,letterSpacing:'-0.5px'}}>Relances</h2>
-        <p style={{color:T.muted,fontSize:'14px',marginTop:'4px'}}>Factures nécessitant une action.</p>
+        <h2 style={{color:C.textPrimary,fontSize:'1.5rem',fontWeight:800,margin:0}}>Relances</h2>
+        <p style={{color:C.textSecondary,fontSize:'14px',marginTop:'4px'}}>Factures nécessitant une action.</p>
       </div>
       {!urgentes.length
-        ?<div style={{textAlign:'center',padding:'4rem',background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:T.r12}}>
+        ?<div style={{textAlign:'center',padding:'4rem',background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
           <div style={{fontSize:'2.5rem',marginBottom:'1rem'}}>🎉</div>
-          <div style={{color:T.white,fontWeight:600,marginBottom:'8px'}}>Tout est à jour !</div>
-          <div style={{color:T.muted,fontSize:'14px'}}>Aucune facture en attente.</div>
+          <div style={{color:C.textPrimary,fontWeight:700,fontSize:'1.1rem',marginBottom:'8px'}}>Tout est à jour !</div>
+          <div style={{color:C.textMuted,fontSize:'14px'}}>Aucune facture en attente de relance.</div>
         </div>
         :<div style={{display:'flex',flexDirection:'column',gap:'1rem'}}>
           {urgentes.map(f=>{
             const c=getC(f.client_id);const jours=daysDiff(f.echeance);const enRetard=jours>0;
             return(
-              <div key={f.id} style={{background:T.bg2,border:`1px solid ${enRetard?'rgba(248,81,73,0.25)':T.bd}`,borderRadius:T.r12,padding:'1.25rem',display:'flex',alignItems:'center',gap:'1.5rem',flexWrap:'wrap'}}>
+              <div key={f.id} style={{background:C.cardBg,border:`1px solid ${enRetard?C.red+'44':C.border}`,borderRadius:'12px',padding:'1.25rem',display:'flex',alignItems:'center',gap:'1.5rem',flexWrap:'wrap',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
                 <div style={{flex:'1 1 180px'}}>
-                  <div style={{color:T.white,fontWeight:600,marginBottom:'3px'}}>{c?.nom||<em style={{color:T.muted}}>Non assigné</em>}</div>
-                  <div style={{color:T.muted,fontSize:'13px'}}>{f.num} · {fmtEur(f.montant)}</div>
-                  {c?.email&&<div style={{color:T.teal,fontSize:'12px',marginTop:'3px'}}>✉ {c.email}</div>}
+                  <div style={{color:C.textPrimary,fontWeight:700,marginBottom:'3px'}}>{c?.nom||<em style={{color:C.textMuted}}>Non assigné</em>}</div>
+                  <div style={{color:C.textSecondary,fontSize:'13px'}}>{f.num} · {fmtEur(f.montant)}</div>
+                  {c?.email&&<div style={{color:C.blue,fontSize:'12px',marginTop:'3px'}}>✉ {c.email}</div>}
                 </div>
                 <div style={{textAlign:'center',minWidth:'80px'}}>
-                  <div style={{fontWeight:800,fontSize:'1.6rem',color:enRetard?'#f85149':'#d29922',lineHeight:1}}>{Math.abs(jours)}j</div>
-                  <div style={{color:T.muted,fontSize:'12px',marginTop:'3px'}}>{enRetard?'de retard':'avant éch.'}</div>
+                  <div style={{fontWeight:800,fontSize:'1.6rem',color:enRetard?C.red:C.amber,lineHeight:1}}>{Math.abs(jours)}j</div>
+                  <div style={{color:C.textMuted,fontSize:'12px',marginTop:'3px'}}>{enRetard?'de retard':'avant éch.'}</div>
                 </div>
                 <Badge s={f.statut}/>
                 <div style={{display:'flex',gap:'8px'}}>
@@ -399,7 +433,7 @@ function Relances({clients,factures,setFactures,toast}){
   );
 }
 
-// ── CLIENTS ───────────────────────────────────────────────
+/* ── CLIENTS ─────────────────────────────────────────────── */
 function Clients({user,clients,setClients,factures,toast}){
   const [showAdd,setShowAdd]=useState(false);
   const [form,setForm]=useState({nom:'',email:'',tel:''});
@@ -407,61 +441,59 @@ function Clients({user,clients,setClients,factures,toast}){
   const [saving,setSaving]=useState(false);
 
   const validate=()=>{const e={};if(!form.nom)e.nom='Requis';if(!form.email||!form.email.includes('@'))e.email='Invalide';setErrs(e);return!Object.keys(e).length;};
-
   const addC=async()=>{
-    if(!validate())return;
-    setSaving(true);
+    if(!validate())return;setSaving(true);
     const{data,error}=await sb.from('clients').insert({...form,user_id:user.id}).select().single();
-    if(error){toast('✕ Erreur lors de la création','error');}
-    else{setClients(p=>[...p,data]);toast('✓ Client ajouté');}
+    if(error){toast('✕ Erreur','error');}else{setClients(p=>[...p,data]);toast('✓ Client ajouté');}
     setForm({nom:'',email:'',tel:''});setErrs({});setShowAdd(false);setSaving(false);
   };
-
   const delC=async id=>{
     const h=factures.some(f=>f.client_id===id);
     if(h&&!window.confirm('Ce client a des factures. Supprimer quand même ?'))return;
-    await sb.from('clients').delete().eq('id',id);
-    setClients(p=>p.filter(c=>c.id!==id));
+    await sb.from('clients').delete().eq('id',id);setClients(p=>p.filter(c=>c.id!==id));
   };
-
   const stats=cid=>{const fs=factures.filter(f=>f.client_id===cid);return{total:fs.length,retard:fs.filter(f=>f.statut==='retard').reduce((s,f)=>s+f.montant,0),encaisse:fs.filter(f=>f.statut==='payee').reduce((s,f)=>s+f.montant,0)};};
+  const initials=nom=>nom.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
 
   return(
     <div>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem'}}>
-        <h2 style={{color:T.white,fontSize:'1.5rem',fontWeight:800,margin:0,letterSpacing:'-0.5px'}}>Clients ({clients.length})</h2>
+        <div>
+          <h2 style={{color:C.textPrimary,fontSize:'1.5rem',fontWeight:800,margin:0}}>Clients</h2>
+          <p style={{color:C.textSecondary,fontSize:'14px',marginTop:'4px'}}>{clients.length} client(s) dans votre base</p>
+        </div>
         <Btn onClick={()=>setShowAdd(true)}>+ Nouveau client</Btn>
       </div>
       {!clients.length&&(
-        <div style={{textAlign:'center',padding:'4rem',background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:T.r12}}>
+        <div style={{textAlign:'center',padding:'4rem',background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
           <div style={{fontSize:'2rem',marginBottom:'1rem'}}>👥</div>
-          <div style={{color:T.white,fontWeight:600,marginBottom:'8px'}}>Aucun client pour l'instant</div>
-          <div style={{color:T.muted,fontSize:'14px',marginBottom:'1.5rem'}}>Ajoutez vos premiers clients pour commencer à gérer vos factures.</div>
+          <div style={{color:C.textPrimary,fontWeight:700,marginBottom:'8px'}}>Aucun client pour l'instant</div>
+          <div style={{color:C.textMuted,fontSize:'14px',marginBottom:'1.5rem'}}>Ajoutez vos premiers clients pour commencer.</div>
           <Btn onClick={()=>setShowAdd(true)}>+ Ajouter un client</Btn>
         </div>
       )}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(270px,1fr))',gap:'1rem'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:'1rem'}}>
         {clients.map(c=>{const st=stats(c.id);return(
-          <div key={c.id} style={{background:T.bg2,border:`1px solid ${st.retard>0?'rgba(248,81,73,0.25)':T.bd}`,borderRadius:T.r12,padding:'1.25rem',position:'relative'}}>
-            <button onClick={()=>delC(c.id)} style={{position:'absolute',top:'12px',right:'12px',background:'none',border:'none',color:T.muted,cursor:'pointer',fontSize:'16px'}}>✕</button>
+          <div key={c.id} style={{background:C.cardBg,border:`1px solid ${st.retard>0?C.red+'44':C.border}`,borderRadius:'12px',padding:'1.25rem',position:'relative',boxShadow:'0 1px 3px rgba(0,0,0,0.04)',transition:'box-shadow .2s'}}>
+            <button onClick={()=>delC(c.id)} style={{position:'absolute',top:'12px',right:'12px',background:'none',border:'none',color:C.textMuted,cursor:'pointer',fontSize:'16px'}}>✕</button>
             <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1rem'}}>
-              <div style={{width:42,height:42,borderRadius:'50%',background:'rgba(29,158,117,0.15)',border:'1px solid rgba(29,158,117,0.25)',display:'flex',alignItems:'center',justifyContent:'center',color:T.teal,fontWeight:700,fontSize:'14px',flexShrink:0}}>{c.nom.slice(0,2).toUpperCase()}</div>
+              <div style={{width:44,height:44,borderRadius:'50%',background:C.blue,display:'flex',alignItems:'center',justifyContent:'center',color:'#ffffff',fontWeight:700,fontSize:'14px',flexShrink:0}}>{initials(c.nom)}</div>
               <div style={{overflow:'hidden'}}>
-                <div style={{color:T.white,fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{c.nom}</div>
-                <div style={{color:T.teal,fontSize:'12px',marginTop:'2px'}}>{c.email}</div>
+                <div style={{color:C.textPrimary,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{c.nom}</div>
+                <div style={{color:C.blue,fontSize:'12px',marginTop:'2px'}}>{c.email}</div>
               </div>
             </div>
-            {c.tel&&<div style={{fontSize:'13px',color:T.muted,marginBottom:'12px'}}>📞 {c.tel}</div>}
-            <div style={{borderTop:`1px solid ${T.bd}`,paddingTop:'10px',display:'flex',justifyContent:'space-between',fontSize:'13px'}}>
-              <span style={{color:T.muted}}>{st.total} facture(s)</span>
-              {st.retard>0?<span style={{color:'#f85149',fontWeight:600}}>{fmtEur(st.retard)} en retard</span>:<span style={{color:'#3fb950'}}>{fmtEur(st.encaisse)} encaissé</span>}
+            {c.tel&&<div style={{fontSize:'13px',color:C.textSecondary,marginBottom:'12px'}}>📞 {c.tel}</div>}
+            <div style={{borderTop:`1px solid ${C.border}`,paddingTop:'10px',display:'flex',justifyContent:'space-between',fontSize:'13px'}}>
+              <span style={{color:C.textMuted}}>{st.total} facture(s)</span>
+              {st.retard>0?<span style={{color:C.red,fontWeight:700}}>{fmtEur(st.retard)} en retard</span>:<span style={{color:C.green,fontWeight:600}}>{fmtEur(st.encaisse)} encaissé</span>}
             </div>
           </div>
         );})}
       </div>
       {showAdd&&(
         <Modal title="Nouveau client" onClose={()=>{setShowAdd(false);setErrs({});}}>
-          <Input label="Nom *" placeholder="Bonneau SARL" value={form.nom} error={errs.nom} onChange={e=>setForm({...form,nom:e.target.value})}/>
+          <Input label="Nom / Raison sociale *" placeholder="Bonneau SARL" value={form.nom} error={errs.nom} onChange={e=>setForm({...form,nom:e.target.value})}/>
           <Input label="Email *" type="email" placeholder="compta@client.fr" value={form.email} error={errs.email} onChange={e=>setForm({...form,email:e.target.value})}/>
           <Input label="Téléphone" placeholder="04 00 00 00 00" value={form.tel} onChange={e=>setForm({...form,tel:e.target.value})}/>
           <div style={{display:'flex',justifyContent:'flex-end',gap:'8px',marginTop:'8px'}}>
@@ -474,7 +506,7 @@ function Clients({user,clients,setClients,factures,toast}){
   );
 }
 
-// ── APP ───────────────────────────────────────────────────
+/* ── APP ─────────────────────────────────────────────────── */
 function App(){
   const [session,setSession]=useState(null);
   const [loading,setLoading]=useState(true);
@@ -485,41 +517,29 @@ function App(){
   const toast=(msg,type='success')=>setToastData({msg,type,key:uid()});
 
   useEffect(()=>{
-    sb.auth.getSession().then(({data:{session}})=>{
-      setSession(session);
-      setLoading(false);
-    });
-    const{data:{subscription}}=sb.auth.onAuthStateChange((_,session)=>{
-      setSession(session);
-      if(!session){setClients([]);setFactures([]);}
-    });
+    sb.auth.getSession().then(({data:{session}})=>{setSession(session);setLoading(false);});
+    const{data:{subscription}}=sb.auth.onAuthStateChange((_,session)=>{setSession(session);if(!session){setClients([]);setFactures([]);}});
     return()=>subscription.unsubscribe();
   },[]);
 
   useEffect(()=>{
     if(!session)return;
-    const loadData=async()=>{
+    (async()=>{
       const[{data:c},{data:f}]=await Promise.all([
         sb.from('clients').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}),
         sb.from('factures').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}),
       ]);
-      if(c)setClients(c);
-      if(f)setFactures(f);
-    };
-    loadData();
+      if(c)setClients(c);if(f)setFactures(f);
+    })();
   },[session]);
 
-  const logout=async()=>{
-    await sb.auth.signOut();
-    setSession(null);
-    setView('dashboard');
-  };
+  const logout=async()=>{await sb.auth.signOut();setSession(null);setView('dashboard');};
 
   if(loading)return(
-    <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}>
+    <div style={{minHeight:'100vh',background:`linear-gradient(135deg,${C.blueDark} 0%,#2d5a9e 100%)`,display:'flex',alignItems:'center',justifyContent:'center'}}>
       <div style={{textAlign:'center'}}>
-        <div style={{fontSize:'32px',fontWeight:900,color:T.white,letterSpacing:'-1px',marginBottom:'1rem'}}>ferply<span style={{color:T.teal}}>.</span></div>
-        <div style={{color:T.muted,fontSize:'14px'}}>Chargement...</div>
+        <Logo size={38} light={true}/>
+        <div style={{color:'#94a3b8',fontSize:'14px',marginTop:'12px'}}>Chargement...</div>
       </div>
     </div>
   );
@@ -530,39 +550,37 @@ function App(){
   const nav=[
     {id:'dashboard',icon:'⊞',label:'Dashboard'},
     {id:'factures', icon:'📄',label:'Factures'},
-    {id:'relances', icon:'⚡',label:'Relances',badge:retardCount||null,bc:'#f85149'},
+    {id:'relances', icon:'⚡',label:'Relances',badge:retardCount||null},
     {id:'clients',  icon:'👥',label:'Clients'},
   ];
 
   return(
-    <div style={{display:'flex',height:'100vh',background:T.bg,color:T.text,overflow:'hidden',fontSize:'14px'}}>
-      <style>{`*{box-sizing:border-box} input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.6)}`}</style>
-      <aside style={{width:'220px',flexShrink:0,background:T.sidebar,borderRight:`1px solid rgba(255,255,255,0.08)`,display:'flex',flexDirection:'column'}}>
-        <div style={{padding:'1.5rem',borderBottom:`1px solid rgba(255,255,255,0.08)`}}>
-          <div style={{fontSize:'26px',fontWeight:400,color:'#ffffff',letterSpacing:'-1px',fontFamily:"Georgia,'Times New Roman',serif"}}>
-            <span style={{fontWeight:700}}>F</span>erply<span style={{color:'#93c5fd',fontWeight:700}}>.</span>
-          </div>
-          <div style={{width:'60px',height:'1.5px',background:'#93c5fd',opacity:0.4,marginTop:'4px'}}/>
-          <div style={{fontSize:'11px',color:'#94a3b8',marginTop:'6px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{session.user.email}</div>
+    <div style={{display:'flex',height:'100vh',background:C.pageBg,color:C.textPrimary,overflow:'hidden',fontSize:'14px'}}>
+      {/* SIDEBAR */}
+      <aside style={{width:'220px',flexShrink:0,background:C.sidebarBg,display:'flex',flexDirection:'column'}}>
+        <div style={{padding:'1.5rem',borderBottom:`1px solid ${C.sidebarBorder}`}}>
+          <Logo size={26} light={true}/>
+          <div style={{fontSize:'11px',color:'#64748b',marginTop:'8px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{session.user.email}</div>
         </div>
-        <nav style={{padding:'1rem 0',flex:1}}>
+        <nav style={{padding:'0.75rem 0',flex:1}}>
           {nav.map(n=>(
-            <button key={n.id} onClick={()=>setView(n.id)} style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 1.25rem',width:'100%',background:view===n.id?'rgba(255,255,255,0.1)':'transparent',borderLeft:`3px solid ${view===n.id?'#93c5fd':'transparent'}`,border:'none',borderRight:'none',color:view===n.id?'#ffffff':'#94a3b8',fontSize:'14px',fontWeight:view===n.id?600:400,cursor:'pointer',textAlign:'left',transition:'all .15s'}}>
+            <button key={n.id} onClick={()=>setView(n.id)} style={{display:'flex',alignItems:'center',gap:'10px',padding:'11px 1.25rem',width:'100%',background:view===n.id?C.sidebarActive:'transparent',borderLeft:`3px solid ${view===n.id?'#93c5fd':'transparent'}`,border:'none',borderRight:'none',color:view===n.id?'#ffffff':'#94a3b8',fontSize:'14px',fontWeight:view===n.id?600:400,cursor:'pointer',textAlign:'left',transition:'all .15s'}}>
               <span style={{fontSize:'16px',flexShrink:0}}>{n.icon}</span>
               <span style={{flex:1}}>{n.label}</span>
-              {n.badge&&<span style={{background:'rgba(220,38,38,0.25)',color:'#fca5a5',fontSize:'11px',fontWeight:700,padding:'2px 7px',borderRadius:'100px'}}>{n.badge}</span>}
+              {n.badge&&<span style={{background:'rgba(220,38,38,0.3)',color:'#fca5a5',fontSize:'11px',fontWeight:700,padding:'2px 7px',borderRadius:'100px'}}>{n.badge}</span>}
             </button>
           ))}
         </nav>
-        <div style={{padding:'1rem 1.25rem',borderTop:`1px solid rgba(255,255,255,0.08)`}}>
-          <div style={{fontSize:'12px',color:'#64748b',marginBottom:'10px'}}>
+        <div style={{padding:'1rem 1.25rem',borderTop:`1px solid ${C.sidebarBorder}`}}>
+          <div style={{fontSize:'12px',marginBottom:'10px'}}>
             <div style={{color:'#86efac',marginBottom:'3px'}}>🔒 Connexion sécurisée</div>
-            <div style={{color:'#94a3b8'}}>{clients.length} clients · {factures.length} factures</div>
+            <div style={{color:'#64748b'}}>{clients.length} clients · {factures.length} factures</div>
           </div>
-          <Btn onClick={logout} variant="outline" full style={{fontSize:'12px',padding:'7px',borderColor:'rgba(255,255,255,0.15)',color:'#94a3b8'}}>Se déconnecter</Btn>
+          <Btn onClick={logout} variant="sidebarBtn" full style={{fontSize:'12px',padding:'7px'}}>Se déconnecter</Btn>
         </div>
       </aside>
-      <main style={{flex:1,overflow:'auto',padding:'2rem',background:T.bg}}>
+      {/* MAIN */}
+      <main style={{flex:1,overflow:'auto',padding:'2rem',background:C.pageBg}}>
         {view==='dashboard'&&<Dashboard clients={clients} factures={factures} setView={setView}/>}
         {view==='factures' &&<Factures  user={session.user} clients={clients} factures={factures} setFactures={setFactures} setView={setView} toast={toast}/>}
         {view==='relances' &&<Relances  clients={clients} factures={factures} setFactures={setFactures} toast={toast}/>}
