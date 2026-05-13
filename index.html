@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>ferply — Dashboard</title>
+<title>Ferply — Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -21,14 +22,19 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useEffect}=React;
+const {useState,useEffect,useRef}=React;
 
+// ── SUPABASE ──────────────────────────────────────────────
+const SUPA_URL='https://lhwmhrswmilmkifgwmnk.supabase.co';
+const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxod21ocnN3bWlsbWtpZmd3bW5rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODAxNjQsImV4cCI6MjA5NDI1NjE2NH0.fK2nlsddJqkn-zvii5bnz0mQiPggdWoX7SXvu6UI7po';
+const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
+
+// ── CONSTANTS ─────────────────────────────────────────────
 const fmtEur=n=>new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n);
 const fmtDate=d=>d?new Date(d).toLocaleDateString('fr-FR'):'—';
 const daysDiff=d=>Math.round((Date.now()-new Date(d))/864e5);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 const now=new Date();
-const dAdd=n=>{const r=new Date(now);r.setDate(r.getDate()+n);return r.toISOString().slice(0,10);};
 
 const T={bg:'#0d1117',bg2:'#161b22',bg3:'#21262d',bd:'#30363d',text:'#e6edf3',muted:'#8b949e',teal:'#1d9e75',white:'#fff',r8:'8px',r12:'12px'};
 const STATUTS={
@@ -37,35 +43,14 @@ const STATUTS={
   relancee:{label:'Relancée',color:'#79c0ff',bg:'rgba(121,192,255,0.12)'},
   payee:{label:'Payée',color:'#3fb950',bg:'rgba(63,185,80,0.12)'},
 };
-const INIT_CLIENTS=[
-  {id:'c1',nom:'Groupe Marseille Tech',email:'compta@gmt.fr',tel:'04 91 00 00 01'},
-  {id:'c2',nom:'Atelier Bonneau SARL',email:'dir@bonneau.fr',tel:'04 93 00 00 02'},
-  {id:'c3',nom:'Lyon Distribution',email:'fact@lyondist.fr',tel:'04 72 00 00 03'},
-  {id:'c4',nom:"Côte d'Azur Services",email:'admin@cas.fr',tel:'04 93 00 00 04'},
-];
-const INIT_FACTURES=[
-  {id:'f1',num:'FAC-2024-089',cid:'c1',montant:12400,emission:dAdd(-62),echeance:dAdd(-32),statut:'retard'},
-  {id:'f2',num:'FAC-2024-092',cid:'c2',montant:6750,emission:dAdd(-45),echeance:dAdd(-14),statut:'relancee'},
-  {id:'f3',num:'FAC-2024-095',cid:'c3',montant:22000,emission:dAdd(-30),echeance:dAdd(7),statut:'attente'},
-  {id:'f4',num:'FAC-2024-087',cid:'c4',montant:9300,emission:dAdd(-75),echeance:dAdd(-45),statut:'payee'},
-  {id:'f5',num:'FAC-2024-098',cid:'c1',montant:5200,emission:dAdd(-15),echeance:dAdd(15),statut:'attente'},
-];
-const INIT_SETTINGS={emailjs:{serviceId:'',templateId:'',publicKey:''},sheetsUrl:'',companyName:'Mon Entreprise',lastSync:null};
 
+// ── UI PRIMITIVES ─────────────────────────────────────────
 function Badge({s}){const st=STATUTS[s]||STATUTS.attente;return <span style={{display:'inline-block',padding:'3px 10px',borderRadius:'100px',fontSize:'12px',fontWeight:600,color:st.color,background:st.bg}}>{st.label}</span>;}
-
-function StatCard({label,value,sub,color}){return(
-  <div style={{background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:T.r12,padding:'1.25rem'}}>
-    <div style={{fontSize:'12px',color:T.muted,marginBottom:'6px',textTransform:'uppercase',letterSpacing:'.5px'}}>{label}</div>
-    <div style={{fontSize:'1.8rem',fontWeight:800,color:color||T.white,letterSpacing:'-1px',lineHeight:1}}>{value}</div>
-    {sub&&<div style={{fontSize:'12px',color:T.muted,marginTop:'6px'}}>{sub}</div>}
-  </div>
-);}
 
 function Btn({onClick,children,variant='primary',full,disabled,loading,style:s={}}){
   const base={padding:'9px 18px',borderRadius:T.r8,fontSize:'13px',fontWeight:600,cursor:disabled||loading?'default':'pointer',width:full?'100%':'auto',opacity:disabled||loading?0.55:1,transition:'opacity .15s',...s};
-  const v={primary:{background:T.teal,color:'#fff',border:'none'},outline:{background:'transparent',color:T.text,border:`1px solid ${T.bd}`},danger:{background:'rgba(248,81,73,0.1)',color:'#f85149',border:'1px solid rgba(248,81,73,0.2)'},success:{background:'rgba(63,185,80,0.1)',color:'#3fb950',border:'1px solid rgba(63,185,80,0.2)'},ghost:{background:'transparent',color:T.muted,border:'none'},info:{background:'rgba(121,192,255,0.1)',color:'#79c0ff',border:'1px solid rgba(121,192,255,0.2)'}};
-  return <button onClick={disabled||loading?undefined:onClick} style={{...base,...(v[variant]||v.primary)}}>{loading?'⏳ ...' : children}</button>;
+  const v={primary:{background:T.teal,color:'#fff',border:'none'},outline:{background:'transparent',color:T.text,border:`1px solid ${T.bd}`},danger:{background:'rgba(248,81,73,0.1)',color:'#f85149',border:'1px solid rgba(248,81,73,0.2)'},success:{background:'rgba(63,185,80,0.1)',color:'#3fb950',border:'1px solid rgba(63,185,80,0.2)'},ghost:{background:'transparent',color:T.muted,border:'none'},info:{background:'rgba(121,192,255,0.1)',color:'#79c0ff',border:'1px solid rgba(121,192,255,0.2)'},red:{background:'rgba(248,81,73,0.15)',color:'#f85149',border:'1px solid rgba(248,81,73,0.3)'}};
+  return <button onClick={disabled||loading?undefined:onClick} style={{...base,...(v[variant]||v.primary)}}>{loading?'⏳...' : children}</button>;
 }
 
 function Input({label,error,...p}){return(
@@ -95,52 +80,108 @@ function Toast({msg,type='success',onDone}){
   return <div style={{position:'fixed',bottom:'2rem',right:'2rem',background:st.bg,border:`1px solid ${st.bd}`,borderRadius:T.r12,padding:'12px 20px',color:st.color,fontSize:'14px',fontWeight:500,zIndex:2000,maxWidth:'380px',lineHeight:1.5}}>{msg}</div>;
 }
 
-function SectionCard({title,icon,children}){return(
-  <div style={{background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:T.r12,marginBottom:'1.5rem',overflow:'hidden'}}>
-    <div style={{padding:'1rem 1.5rem',borderBottom:`1px solid ${T.bd}`,display:'flex',alignItems:'center',gap:'10px'}}>
-      <span style={{fontSize:'18px'}}>{icon}</span>
-      <h3 style={{color:T.white,fontSize:'15px',fontWeight:600,margin:0}}>{title}</h3>
-    </div>
-    <div style={{padding:'1.5rem'}}>{children}</div>
-  </div>
-);}
+// ── AUTH PAGE ─────────────────────────────────────────────
+function AuthPage({onAuth}){
+  const [mode,setMode]=useState('login');
+  const [email,setEmail]=useState('');
+  const [pwd,setPwd]=useState('');
+  const [company,setCompany]=useState('');
+  const [code,setCode]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState('');
+  const [success,setSuccess]=useState('');
 
-function StepGuide({steps}){return(
-  <div style={{marginBottom:'1.5rem'}}>
-    {steps.map((s,i)=>(
-      <div key={i} style={{display:'flex',gap:'12px',marginBottom:'10px',alignItems:'flex-start'}}>
-        <div style={{width:24,height:24,borderRadius:'50%',background:'rgba(29,158,117,0.15)',border:'1px solid rgba(29,158,117,0.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:'11px',fontWeight:700,color:T.teal,marginTop:'1px'}}>{i+1}</div>
-        <div style={{fontSize:'13px',color:T.muted,lineHeight:1.6}} dangerouslySetInnerHTML={{__html:s}}/>
+  // Code d'invitation — tu peux le changer
+  const INVITE_CODE='FERPLY2024';
+
+  const handleLogin=async()=>{
+    if(!email||!pwd){setError('Email et mot de passe requis');return;}
+    setLoading(true);setError('');
+    const{error:e}=await sb.auth.signInWithPassword({email,password:pwd});
+    if(e){setError('Email ou mot de passe incorrect');setLoading(false);return;}
+    onAuth();
+  };
+
+  const handleSignup=async()=>{
+    if(!email||!pwd||!company){setError('Tous les champs sont requis');return;}
+    if(code!==INVITE_CODE){setError('Code d\'invitation invalide. Contactez ferply pour obtenir un accès.');return;}
+    if(pwd.length<8){setError('Le mot de passe doit contenir au moins 8 caractères');return;}
+    setLoading(true);setError('');
+    const{data,error:e}=await sb.auth.signUp({email,password:pwd,options:{data:{company_name:company}}});
+    if(e){setError(e.message);setLoading(false);return;}
+    if(data.user){
+      await sb.from('profiles').insert({id:data.user.id,email,company_name:company,invited:true});
+    }
+    setSuccess('Compte créé ! Vérifiez votre email pour confirmer votre inscription.');
+    setLoading(false);
+  };
+
+  return(
+    <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
+      <div style={{width:'100%',maxWidth:'420px'}}>
+        {/* Logo */}
+        <div style={{textAlign:'center',marginBottom:'2.5rem'}}>
+          <div style={{fontSize:'38px',fontWeight:900,color:T.white,letterSpacing:'-2px',marginBottom:'8px'}}>
+            ferply<span style={{color:T.teal}}>.</span>
+          </div>
+          <p style={{color:T.muted,fontSize:'15px'}}>La trésorerie, enfin sous contrôle.</p>
+        </div>
+
+        {/* Card */}
+        <div style={{background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:'16px',padding:'2rem'}}>
+          {/* Tabs */}
+          <div style={{display:'flex',gap:'4px',background:T.bg3,borderRadius:T.r8,padding:'4px',marginBottom:'1.5rem'}}>
+            {[['login','Connexion'],['signup','Créer un compte']].map(([m,l])=>(
+              <button key={m} onClick={()=>{setMode(m);setError('');setSuccess('');}} style={{flex:1,padding:'8px',borderRadius:'6px',border:'none',fontSize:'13px',fontWeight:500,cursor:'pointer',background:mode===m?T.bg2:'transparent',color:mode===m?T.white:T.muted,transition:'all .15s'}}>{l}</button>
+            ))}
+          </div>
+
+          {error&&<div style={{background:'rgba(248,81,73,0.08)',border:'1px solid rgba(248,81,73,0.2)',borderRadius:T.r8,padding:'10px 14px',color:'#f85149',fontSize:'13px',marginBottom:'1rem'}}>{error}</div>}
+          {success&&<div style={{background:'rgba(63,185,80,0.08)',border:'1px solid rgba(63,185,80,0.2)',borderRadius:T.r8,padding:'10px 14px',color:'#3fb950',fontSize:'13px',marginBottom:'1rem'}}>{success}</div>}
+
+          {mode==='login'?(
+            <>
+              <Input label="Email" type="email" placeholder="vous@entreprise.fr" value={email} onChange={e=>setEmail(e.target.value)}/>
+              <Input label="Mot de passe" type="password" placeholder="••••••••" value={pwd} onChange={e=>setPwd(e.target.value)}/>
+              <Btn onClick={handleLogin} loading={loading} full style={{marginTop:'8px'}}>Se connecter</Btn>
+              <p style={{fontSize:'12px',color:T.muted,textAlign:'center',marginTop:'1rem'}}>
+                Pas encore de compte ? <span onClick={()=>setMode('signup')} style={{color:T.teal,cursor:'pointer'}}>Demandez un accès</span>
+              </p>
+            </>
+          ):(
+            <>
+              <Input label="Raison sociale *" placeholder="Mon Entreprise SAS" value={company} onChange={e=>setCompany(e.target.value)}/>
+              <Input label="Email professionnel *" type="email" placeholder="vous@entreprise.fr" value={email} onChange={e=>setEmail(e.target.value)}/>
+              <Input label="Mot de passe *" type="password" placeholder="8 caractères minimum" value={pwd} onChange={e=>setPwd(e.target.value)}/>
+              <div style={{marginBottom:'1rem'}}>
+                <label style={{display:'block',fontSize:'13px',color:T.muted,marginBottom:'5px'}}>Code d'invitation *</label>
+                <input type="text" placeholder="Entrez votre code d'accès" value={code} onChange={e=>setCode(e.target.value.toUpperCase())} style={{width:'100%',padding:'9px 12px',background:T.bg3,border:`1px solid ${T.bd}`,borderRadius:T.r8,color:T.teal,fontSize:'14px',outline:'none',fontFamily:'monospace',letterSpacing:'2px',boxSizing:'border-box'}}/>
+                <div style={{fontSize:'11px',color:T.muted,marginTop:'4px'}}>Contactez-nous sur ferply.io pour obtenir votre code d'accès</div>
+              </div>
+              <Btn onClick={handleSignup} loading={loading} full style={{marginTop:'8px'}}>Créer mon compte</Btn>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <p style={{textAlign:'center',fontSize:'12px',color:T.muted,marginTop:'1.5rem'}}>
+          🔒 Données hébergées en Europe · Conformité RGPD · Chiffrement SSL
+        </p>
       </div>
-    ))}
+    </div>
+  );
+}
+
+// ── STAT CARD ─────────────────────────────────────────────
+function StatCard({label,value,sub,color}){return(
+  <div style={{background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:T.r12,padding:'1.25rem'}}>
+    <div style={{fontSize:'12px',color:T.muted,marginBottom:'6px',textTransform:'uppercase',letterSpacing:'.5px'}}>{label}</div>
+    <div style={{fontSize:'1.8rem',fontWeight:800,color:color||T.white,letterSpacing:'-1px',lineHeight:1}}>{value}</div>
+    {sub&&<div style={{fontSize:'12px',color:T.muted,marginTop:'6px'}}>{sub}</div>}
   </div>
 );}
 
-function sheetsToCsvUrl(url){
-  if(url.includes('pub?')&&url.includes('output=csv'))return url;
-  if(url.includes('pub?')&&!url.includes('output=csv'))return url+'&output=csv';
-  const m=url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if(m)return `https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv`;
-  throw new Error('URL non reconnue — utilisez "Publier sur le web → CSV"');
-}
-
-function parseSheetRow(row,clients){
-  const keys=Object.keys(row);
-  const norm=k=>k.toLowerCase().replace(/[éèê]/g,'e').replace(/[àâ]/g,'a').replace(/[^a-z0-9]/g,'');
-  const get=aliases=>{for(const a of aliases){const k=keys.find(k2=>norm(k2)===a||norm(k2).includes(a)||a.includes(norm(k2)));if(k&&row[k]!==null&&row[k]!==undefined&&String(row[k]).trim())return String(row[k]).trim();}return '';};
-  const nom=get(['client','nomclient','societe','company','nom']);
-  const client=nom?clients.find(c=>c.nom.toLowerCase().includes(nom.toLowerCase().slice(0,4)))||null:null;
-  const mStr=get(['montant','amount','total','prix','ht','ttc']);
-  const montant=parseFloat(mStr.replace(/[^0-9.,]/g,'').replace(',','.'))||0;
-  if(!montant)return null;
-  return{id:uid(),num:get(['numero','facture','num','ref','invoice','n','no'])||`IMP-${uid()}`,cid:client?.id||'',montant,emission:get(['emission','creation','date','issued'])||now.toISOString().slice(0,10),echeance:get(['echeance','due','deadline','fin'])||'',statut:'attente'};
-}
-
-async function callEmailJS(cfg,params){
-  const res=await fetch('https://api.emailjs.com/api/v1.0/email/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service_id:cfg.serviceId,template_id:cfg.templateId,user_id:cfg.publicKey,template_params:params})});
-  if(!res.ok){const t=await res.text();throw new Error(t||`Erreur HTTP ${res.status}`);}
-}
-
+// ── DASHBOARD ─────────────────────────────────────────────
 function Dashboard({clients,factures,setView}){
   const actives=factures.filter(f=>f.statut!=='payee');
   const retardF=factures.filter(f=>f.statut==='retard');
@@ -164,7 +205,7 @@ function Dashboard({clients,factures,setView}){
             <span>⚠️</span>
             <div>
               <div style={{color:'#f85149',fontWeight:600,fontSize:'14px'}}>{retardF.length} facture(s) en retard</div>
-              <div style={{color:T.muted,fontSize:'13px'}}>{fmtEur(retardF.reduce((s,f)=>s+f.montant,0))} à ferplyer</div>
+              <div style={{color:T.muted,fontSize:'13px'}}>{fmtEur(retardF.reduce((s,f)=>s+f.montant,0))} à recouvrer</div>
             </div>
           </div>
           <Btn onClick={()=>setView('relances')} variant="danger" style={{fontSize:'13px'}}>Gérer les relances →</Btn>
@@ -177,14 +218,15 @@ function Dashboard({clients,factures,setView}){
         </div>
         <div style={{overflowX:'auto'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:'14px'}}>
-            <thead><tr style={{borderBottom:`1px solid ${T.bd}`}}>{['Numéro','Client','Montant','Échéance','Statut'].map(h=><th key={h} style={{padding:'9px 16px',textAlign:'left',color:T.muted,fontWeight:500,fontSize:'12px',whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
+            <thead><tr style={{borderBottom:`1px solid ${T.bd}`}}>{['Numéro','Client','Montant','Échéance','Statut'].map(h=><th key={h} style={{padding:'9px 16px',textAlign:'left',color:T.muted,fontWeight:500,fontSize:'12px'}}>{h}</th>)}</tr></thead>
             <tbody>
+              {!recentes.length&&<tr><td colSpan={5} style={{padding:'2rem',textAlign:'center',color:T.muted}}>Aucune facture pour l'instant</td></tr>}
               {recentes.map(f=>(
                 <tr key={f.id} style={{borderBottom:`1px solid rgba(48,54,61,0.4)`}}>
-                  <td style={{padding:'11px 16px',color:T.text,fontFamily:'monospace',fontSize:'12px',whiteSpace:'nowrap'}}>{f.num}</td>
-                  <td style={{padding:'11px 16px',color:T.text}}>{getC(f.cid)?.nom||<em style={{color:T.muted}}>—</em>}</td>
-                  <td style={{padding:'11px 16px',color:T.white,fontWeight:700,whiteSpace:'nowrap'}}>{fmtEur(f.montant)}</td>
-                  <td style={{padding:'11px 16px',color:f.statut==='retard'?'#f85149':T.muted,fontSize:'13px',whiteSpace:'nowrap'}}>{fmtDate(f.echeance)}</td>
+                  <td style={{padding:'11px 16px',color:T.text,fontFamily:'monospace',fontSize:'12px'}}>{f.num}</td>
+                  <td style={{padding:'11px 16px',color:T.text}}>{getC(f.client_id)?.nom||'—'}</td>
+                  <td style={{padding:'11px 16px',color:T.white,fontWeight:700}}>{fmtEur(f.montant)}</td>
+                  <td style={{padding:'11px 16px',color:f.statut==='retard'?'#f85149':T.muted,fontSize:'13px'}}>{fmtDate(f.echeance)}</td>
                   <td style={{padding:'11px 16px'}}><Badge s={f.statut}/></td>
                 </tr>
               ))}
@@ -196,58 +238,48 @@ function Dashboard({clients,factures,setView}){
   );
 }
 
-function Factures({clients,factures,setFactures,settings,setView,toast}){
+// ── FACTURES ──────────────────────────────────────────────
+function Factures({user,clients,factures,setFactures,setView,toast}){
   const [filter,setFilter]=useState('tous');
   const [search,setSearch]=useState('');
   const [showAdd,setShowAdd]=useState(false);
-  const [showCsv,setShowCsv]=useState(false);
-  const [form,setForm]=useState({num:'',cid:'',montant:'',emission:'',echeance:'',statut:'attente'});
+  const [form,setForm]=useState({num:'',client_id:'',montant:'',emission:'',echeance:'',statut:'attente'});
   const [errs,setErrs]=useState({});
-  const [csvText,setCsvText]=useState('');
-  const [csvResult,setCsvResult]=useState(null);
-  const [syncing,setSyncing]=useState(false);
+  const [saving,setSaving]=useState(false);
   const getC=cid=>clients.find(c=>c.id===cid);
-  const filtered=factures.filter(f=>filter==='tous'||f.statut===filter).filter(f=>{if(!search)return true;const q=search.toLowerCase();return f.num.toLowerCase().includes(q)||(getC(f.cid)?.nom||'').toLowerCase().includes(q);});
+  const filtered=factures.filter(f=>filter==='tous'||f.statut===filter).filter(f=>{if(!search)return true;const q=search.toLowerCase();return f.num.toLowerCase().includes(q)||(getC(f.client_id)?.nom||'').toLowerCase().includes(q);});
   const cnt=s=>factures.filter(f=>f.statut===s).length;
-  const validate=()=>{const e={};if(!form.num)e.num='Requis';if(!form.cid)e.cid='Requis';if(!form.montant||isNaN(form.montant))e.montant='Invalide';if(!form.echeance)e.echeance='Requis';setErrs(e);return!Object.keys(e).length;};
-  const addF=()=>{if(!validate())return;setFactures(p=>[{...form,id:uid(),montant:parseFloat(form.montant),emission:form.emission||now.toISOString().slice(0,10)},...p]);setForm({num:'',cid:'',montant:'',emission:'',echeance:'',statut:'attente'});setErrs({});setShowAdd(false);toast('✓ Facture créée');};
-  const markPaid=id=>{setFactures(p=>p.map(f=>f.id===id?{...f,statut:'payee'}:f));toast('✓ Facture marquée payée');};
-  const del=id=>{if(window.confirm('Supprimer cette facture ?'))setFactures(p=>p.filter(f=>f.id!==id));};
-  const syncSheets=async()=>{
-    if(!settings.sheetsUrl){toast('⚙ Configurez l\'URL Google Sheets dans Paramètres','info');setView('parametres');return;}
-    setSyncing(true);
-    try{
-      const csvUrl=sheetsToCsvUrl(settings.sheetsUrl);
-      const res=await fetch(csvUrl);
-      if(!res.ok)throw new Error(`HTTP ${res.status}`);
-      const text=await res.text();
-      const parsed=Papa.parse(text,{header:true,skipEmptyLines:true});
-      const existing=new Set(factures.map(f=>f.num));
-      const news=parsed.data.map(r=>parseSheetRow(r,clients)).filter(f=>f&&f.montant>0&&!existing.has(f.num));
-      if(!news.length){toast('ℹ Aucune nouvelle facture détectée','info');}
-      else{setFactures(p=>[...news,...p]);toast(`✓ ${news.length} facture(s) importée(s) depuis Google Sheets`);}
-    }catch(e){toast(`✕ Erreur : ${e.message}`,'error');}
-    setSyncing(false);
+
+  const validate=()=>{const e={};if(!form.num)e.num='Requis';if(!form.client_id)e.client_id='Requis';if(!form.montant||isNaN(form.montant))e.montant='Invalide';if(!form.echeance)e.echeance='Requis';setErrs(e);return!Object.keys(e).length;};
+
+  const addF=async()=>{
+    if(!validate())return;
+    setSaving(true);
+    const newF={num:form.num,client_id:form.client_id,montant:parseFloat(form.montant),emission:form.emission||now.toISOString().slice(0,10),echeance:form.echeance,statut:'attente',user_id:user.id};
+    const{data,error}=await sb.from('factures').insert(newF).select().single();
+    if(error){toast('✕ Erreur lors de la création','error');}
+    else{setFactures(p=>[data,...p]);toast('✓ Facture créée');}
+    setForm({num:'',client_id:'',montant:'',emission:'',echeance:'',statut:'attente'});
+    setErrs({});setShowAdd(false);setSaving(false);
   };
-  const analyseCSV=()=>{
-    const parsed=Papa.parse(csvText.trim(),{header:true,skipEmptyLines:true});
-    if(!parsed.data?.length){setCsvResult({error:'Aucune donnée détectée'});return;}
-    const existing=new Set(factures.map(f=>f.num));
-    const rows=parsed.data.map(r=>parseSheetRow(r,clients)).filter(f=>f&&f.montant>0);
-    const news=rows.filter(f=>!existing.has(f.num));
-    if(!rows.length){setCsvResult({error:'Aucune facture valide. Vérifiez les colonnes.'});return;}
-    setCsvResult({news,total:rows.length,dups:rows.length-news.length,unknown:news.filter(f=>!f.cid).length});
+
+  const markPaid=async id=>{
+    await sb.from('factures').update({statut:'payee'}).eq('id',id);
+    setFactures(p=>p.map(f=>f.id===id?{...f,statut:'payee'}:f));
+    toast('✓ Facture marquée payée');
   };
-  const confirmCSV=()=>{setFactures(p=>[...csvResult.news,...p]);toast(`✓ ${csvResult.news.length} facture(s) importée(s)`);setCsvText('');setCsvResult(null);setShowCsv(false);};
+
+  const del=async id=>{
+    if(!window.confirm('Supprimer cette facture ?'))return;
+    await sb.from('factures').delete().eq('id',id);
+    setFactures(p=>p.filter(f=>f.id!==id));
+  };
+
   return(
     <div>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem',flexWrap:'wrap',gap:'1rem'}}>
         <h2 style={{color:T.white,fontSize:'1.5rem',fontWeight:800,margin:0,letterSpacing:'-0.5px'}}>Factures</h2>
-        <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-          <Btn onClick={syncSheets} loading={syncing} variant="info" style={{fontSize:'13px'}}>🔄 Sync Google Sheets</Btn>
-          <Btn onClick={()=>setShowCsv(true)} variant="outline" style={{fontSize:'13px'}}>↑ Import CSV</Btn>
-          <Btn onClick={()=>setShowAdd(true)}>+ Nouvelle</Btn>
-        </div>
+        <Btn onClick={()=>setShowAdd(true)}>+ Nouvelle facture</Btn>
       </div>
       <div style={{display:'flex',gap:'6px',marginBottom:'1rem',flexWrap:'wrap',alignItems:'center'}}>
         {[['tous','Toutes'],['attente','En attente'],['retard','En retard'],['relancee','Relancées'],['payee','Payées']].map(([k,l])=>(
@@ -260,22 +292,22 @@ function Factures({clients,factures,setFactures,settings,setView,toast}){
       <div style={{background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:T.r12,overflow:'hidden'}}>
         <div style={{overflowX:'auto'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:'14px'}}>
-            <thead><tr style={{borderBottom:`1px solid ${T.bd}`}}>{['Numéro','Client','Montant','Échéance','Statut','Actions'].map(h=><th key={h} style={{padding:'9px 14px',textAlign:'left',color:T.muted,fontWeight:500,fontSize:'12px',whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
+            <thead><tr style={{borderBottom:`1px solid ${T.bd}`}}>{['Numéro','Client','Montant','Échéance','Statut','Actions'].map(h=><th key={h} style={{padding:'9px 14px',textAlign:'left',color:T.muted,fontWeight:500,fontSize:'12px'}}>{h}</th>)}</tr></thead>
             <tbody>
               {!filtered.length&&<tr><td colSpan={6} style={{padding:'3rem',textAlign:'center',color:T.muted}}>Aucune facture</td></tr>}
               {filtered.map(f=>(
                 <tr key={f.id} style={{borderBottom:`1px solid rgba(48,54,61,0.4)`}}>
-                  <td style={{padding:'10px 14px',fontFamily:'monospace',fontSize:'12px',color:T.text,whiteSpace:'nowrap'}}>{f.num}</td>
-                  <td style={{padding:'10px 14px',color:T.text,maxWidth:'150px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{getC(f.cid)?.nom||<em style={{color:T.muted}}>Non assigné</em>}</td>
-                  <td style={{padding:'10px 14px',color:T.white,fontWeight:700,whiteSpace:'nowrap'}}>{fmtEur(f.montant)}</td>
-                  <td style={{padding:'10px 14px',fontSize:'13px',whiteSpace:'nowrap'}}>
+                  <td style={{padding:'10px 14px',fontFamily:'monospace',fontSize:'12px',color:T.text}}>{f.num}</td>
+                  <td style={{padding:'10px 14px',color:T.text,maxWidth:'140px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{getC(f.client_id)?.nom||<em style={{color:T.muted}}>—</em>}</td>
+                  <td style={{padding:'10px 14px',color:T.white,fontWeight:700}}>{fmtEur(f.montant)}</td>
+                  <td style={{padding:'10px 14px',fontSize:'13px'}}>
                     <span style={{color:f.statut==='retard'?'#f85149':T.muted}}>{fmtDate(f.echeance)}</span>
                     {f.statut==='retard'&&<span style={{display:'block',fontSize:'11px',color:'#f85149'}}>{daysDiff(f.echeance)}j de retard</span>}
                   </td>
                   <td style={{padding:'10px 14px'}}><Badge s={f.statut}/></td>
                   <td style={{padding:'10px 14px'}}>
                     <div style={{display:'flex',gap:'5px'}}>
-                      {f.statut!=='payee'&&<Btn onClick={()=>markPaid(f.id)} variant="success" style={{padding:'4px 9px',fontSize:'11px'}}>✓ Payée</Btn>}
+                      {f.statut!=='payee'&&<Btn onClick={()=>markPaid(f.id)} variant="success" style={{padding:'4px 9px',fontSize:'11px'}}>✓</Btn>}
                       <Btn onClick={()=>del(f.id)} variant="danger" style={{padding:'4px 9px',fontSize:'11px'}}>✕</Btn>
                     </div>
                   </td>
@@ -290,7 +322,7 @@ function Factures({clients,factures,setFactures,settings,setView,toast}){
           <Input label="Numéro *" placeholder="FAC-2024-001" value={form.num} error={errs.num} onChange={e=>setForm({...form,num:e.target.value})}/>
           <div style={{marginBottom:'1rem'}}>
             <label style={{display:'block',fontSize:'13px',color:T.muted,marginBottom:'5px'}}>Client *</label>
-            <select value={form.cid} onChange={e=>setForm({...form,cid:e.target.value})} style={{width:'100%',padding:'9px 12px',background:T.bg3,border:`1px solid ${errs.cid?'#f85149':T.bd}`,borderRadius:T.r8,color:T.text,fontSize:'14px',outline:'none'}}>
+            <select value={form.client_id} onChange={e=>setForm({...form,client_id:e.target.value})} style={{width:'100%',padding:'9px 12px',background:T.bg3,border:`1px solid ${errs.client_id?'#f85149':T.bd}`,borderRadius:T.r8,color:T.text,fontSize:'14px',outline:'none'}}>
               <option value="">— Sélectionner —</option>
               {clients.map(c=><option key={c.id} value={c.id}>{c.nom}</option>)}
             </select>
@@ -302,29 +334,7 @@ function Factures({clients,factures,setFactures,settings,setView,toast}){
           </div>
           <div style={{display:'flex',justifyContent:'flex-end',gap:'8px',marginTop:'8px'}}>
             <Btn onClick={()=>{setShowAdd(false);setErrs({});}} variant="outline">Annuler</Btn>
-            <Btn onClick={addF}>Créer</Btn>
-          </div>
-        </Modal>
-      )}
-      {showCsv&&(
-        <Modal title="Import CSV" onClose={()=>{setShowCsv(false);setCsvText('');setCsvResult(null);}} width={540}>
-          <p style={{fontSize:'13px',color:T.muted,marginBottom:'1rem',lineHeight:1.6}}>Colonnes : <code style={{color:T.teal}}>numero, client, montant, emission, echeance</code></p>
-          <textarea value={csvText} onChange={e=>{setCsvText(e.target.value);setCsvResult(null);}} rows={7} placeholder={"numero;client;montant;echeance\nFAC-001;Bonneau SARL;5000;2024-12-15"} style={{width:'100%',padding:'10px',background:T.bg3,border:`1px solid ${T.bd}`,borderRadius:T.r8,color:T.text,fontSize:'13px',fontFamily:'monospace',outline:'none',boxSizing:'border-box'}}/>
-          {csvResult&&(
-            <div style={{marginTop:'1rem',padding:'12px',borderRadius:T.r8,background:csvResult.error?'rgba(248,81,73,0.08)':'rgba(63,185,80,0.08)',border:`1px solid ${csvResult.error?'rgba(248,81,73,0.2)':'rgba(63,185,80,0.2)'}`}}>
-              {csvResult.error?<p style={{color:'#f85149',margin:0,fontSize:'13px'}}>⚠ {csvResult.error}</p>:(
-                <div style={{fontSize:'13px'}}>
-                  <p style={{color:'#3fb950',margin:'0 0 4px',fontWeight:600}}>✓ {csvResult.news.length} facture(s) à importer</p>
-                  {csvResult.dups>0&&<p style={{color:T.muted,margin:'0 0 2px'}}>{csvResult.dups} doublon(s) ignoré(s)</p>}
-                  {csvResult.unknown>0&&<p style={{color:'#d29922',margin:0}}>⚠ {csvResult.unknown} client(s) non trouvé(s)</p>}
-                </div>
-              )}
-            </div>
-          )}
-          <div style={{display:'flex',justifyContent:'flex-end',gap:'8px',marginTop:'1rem'}}>
-            <Btn onClick={()=>{setShowCsv(false);setCsvText('');setCsvResult(null);}} variant="outline">Annuler</Btn>
-            {!csvResult?.news&&<Btn onClick={analyseCSV} disabled={!csvText.trim()}>Analyser</Btn>}
-            {csvResult?.news&&<Btn onClick={confirmCSV}>Importer {csvResult.news.length}</Btn>}
+            <Btn onClick={addF} loading={saving}>Créer</Btn>
           </div>
         </Modal>
       )}
@@ -332,50 +342,44 @@ function Factures({clients,factures,setFactures,settings,setView,toast}){
   );
 }
 
-function Relances({clients,factures,setFactures,settings,setView,toast}){
-  const [sending,setSending]=useState(new Set());
-  const [sentLog,setSentLog]=useState([]);
+// ── RELANCES ──────────────────────────────────────────────
+function Relances({clients,factures,setFactures,toast}){
   const getC=cid=>clients.find(c=>c.id===cid);
-  const ejOk=settings.emailjs.serviceId&&settings.emailjs.templateId&&settings.emailjs.publicKey;
   const urgentes=factures.filter(f=>['retard','attente','relancee'].includes(f.statut)).sort((a,b)=>new Date(a.echeance)-new Date(b.echeance));
-  const sendEmail=async(f)=>{
-    const c=getC(f.cid);
-    if(!c?.email){toast('✕ Aucun email pour ce client','error');return;}
-    if(!ejOk){toast('⚙ Configurez EmailJS dans Paramètres','info');setView('parametres');return;}
-    setSending(p=>new Set([...p,f.id]));
-    try{
-      await callEmailJS(settings.emailjs,{to_name:c.nom,to_email:c.email,invoice_number:f.num,amount:fmtEur(f.montant),due_date:fmtDate(f.echeance),days_late:daysDiff(f.echeance)>0?`${daysDiff(f.echeance)} jours`:'à échéance',company_name:settings.companyName||'Notre entreprise'});
-      setFactures(p=>p.map(fc=>fc.id===f.id?{...fc,statut:'relancee'}:fc));
-      setSentLog(p=>[{id:uid(),facNum:f.num,client:c.nom,email:c.email,date:new Date().toLocaleString('fr-FR')},...p.slice(0,9)]);
-      toast(`✓ Email envoyé à ${c.email}`);
-    }catch(e){toast(`✕ Erreur EmailJS : ${e.message}`,'error');}
-    setSending(p=>{const n=new Set(p);n.delete(f.id);return n;});
+
+  const relancer=async id=>{
+    await sb.from('factures').update({statut:'relancee'}).eq('id',id);
+    setFactures(p=>p.map(f=>f.id===id?{...f,statut:'relancee'}:f));
+    toast('✉ Relance enregistrée');
   };
-  const markPaid=id=>{setFactures(p=>p.map(f=>f.id===id?{...f,statut:'payee'}:f));toast('✓ Payée');};
+
+  const payer=async id=>{
+    await sb.from('factures').update({statut:'payee'}).eq('id',id);
+    setFactures(p=>p.map(f=>f.id===id?{...f,statut:'payee'}:f));
+    toast('✓ Payée');
+  };
+
   return(
     <div>
       <div style={{marginBottom:'1.5rem'}}>
         <h2 style={{color:T.white,fontSize:'1.5rem',fontWeight:800,margin:0,letterSpacing:'-0.5px'}}>Relances</h2>
-        <p style={{color:T.muted,fontSize:'14px',marginTop:'4px'}}>
-          {ejOk?<span style={{color:'#3fb950'}}>✓ EmailJS configuré</span>:<span style={{color:'#f85149',cursor:'pointer'}} onClick={()=>setView('parametres')}>⚙ EmailJS non configuré — cliquez ici</span>}
-        </p>
+        <p style={{color:T.muted,fontSize:'14px',marginTop:'4px'}}>Factures nécessitant une action.</p>
       </div>
-      {!urgentes.length?(
-        <div style={{textAlign:'center',padding:'4rem',background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:T.r12}}>
+      {!urgentes.length
+        ?<div style={{textAlign:'center',padding:'4rem',background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:T.r12}}>
           <div style={{fontSize:'2.5rem',marginBottom:'1rem'}}>🎉</div>
           <div style={{color:T.white,fontWeight:600,marginBottom:'8px'}}>Tout est à jour !</div>
           <div style={{color:T.muted,fontSize:'14px'}}>Aucune facture en attente.</div>
         </div>
-      ):(
-        <div style={{display:'flex',flexDirection:'column',gap:'1rem'}}>
+        :<div style={{display:'flex',flexDirection:'column',gap:'1rem'}}>
           {urgentes.map(f=>{
-            const c=getC(f.cid);const jours=daysDiff(f.echeance);const enRetard=jours>0;const isSending=sending.has(f.id);
+            const c=getC(f.client_id);const jours=daysDiff(f.echeance);const enRetard=jours>0;
             return(
               <div key={f.id} style={{background:T.bg2,border:`1px solid ${enRetard?'rgba(248,81,73,0.25)':T.bd}`,borderRadius:T.r12,padding:'1.25rem',display:'flex',alignItems:'center',gap:'1.5rem',flexWrap:'wrap'}}>
                 <div style={{flex:'1 1 180px'}}>
                   <div style={{color:T.white,fontWeight:600,marginBottom:'3px'}}>{c?.nom||<em style={{color:T.muted}}>Non assigné</em>}</div>
                   <div style={{color:T.muted,fontSize:'13px'}}>{f.num} · {fmtEur(f.montant)}</div>
-                  {c?.email?<div style={{color:T.teal,fontSize:'12px',marginTop:'3px'}}>✉ {c.email}</div>:<div style={{color:'#f85149',fontSize:'12px',marginTop:'3px'}}>⚠ Pas d'email</div>}
+                  {c?.email&&<div style={{color:T.teal,fontSize:'12px',marginTop:'3px'}}>✉ {c.email}</div>}
                 </div>
                 <div style={{textAlign:'center',minWidth:'80px'}}>
                   <div style={{fontWeight:800,fontSize:'1.6rem',color:enRetard?'#f85149':'#d29922',lineHeight:1}}>{Math.abs(jours)}j</div>
@@ -383,48 +387,59 @@ function Relances({clients,factures,setFactures,settings,setView,toast}){
                 </div>
                 <Badge s={f.statut}/>
                 <div style={{display:'flex',gap:'8px'}}>
-                  <Btn onClick={()=>sendEmail(f)} loading={isSending} variant="outline" style={{fontSize:'13px'}}>✉ Envoyer relance</Btn>
-                  <Btn onClick={()=>markPaid(f.id)} variant="success" style={{fontSize:'13px'}}>✓ Payée</Btn>
+                  <Btn onClick={()=>relancer(f.id)} variant="outline" style={{fontSize:'13px'}}>✉ Relancer</Btn>
+                  <Btn onClick={()=>payer(f.id)} variant="success" style={{fontSize:'13px'}}>✓ Payée</Btn>
                 </div>
               </div>
             );
           })}
         </div>
-      )}
-      {sentLog.length>0&&(
-        <div style={{marginTop:'2rem'}}>
-          <h3 style={{color:T.white,fontSize:'15px',fontWeight:600,marginBottom:'1rem'}}>Historique des envois</h3>
-          <div style={{background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:T.r12,overflow:'hidden'}}>
-            {sentLog.map((l,i)=>(
-              <div key={l.id} style={{display:'flex',gap:'1rem',padding:'10px 16px',borderBottom:i<sentLog.length-1?`1px solid rgba(48,54,61,0.4)`:'none',fontSize:'13px',alignItems:'center',flexWrap:'wrap'}}>
-                <span style={{color:'#3fb950'}}>✓</span>
-                <span style={{color:T.text,flex:1}}>{l.client}</span>
-                <span style={{color:T.muted,fontFamily:'monospace'}}>{l.facNum}</span>
-                <span style={{color:T.teal}}>{l.email}</span>
-                <span style={{color:T.muted,fontSize:'12px'}}>{l.date}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      }
     </div>
   );
 }
 
-function Clients({clients,setClients,factures,toast}){
+// ── CLIENTS ───────────────────────────────────────────────
+function Clients({user,clients,setClients,factures,toast}){
   const [showAdd,setShowAdd]=useState(false);
   const [form,setForm]=useState({nom:'',email:'',tel:''});
   const [errs,setErrs]=useState({});
+  const [saving,setSaving]=useState(false);
+
   const validate=()=>{const e={};if(!form.nom)e.nom='Requis';if(!form.email||!form.email.includes('@'))e.email='Invalide';setErrs(e);return!Object.keys(e).length;};
-  const addC=()=>{if(!validate())return;setClients(p=>[...p,{...form,id:uid()}]);setForm({nom:'',email:'',tel:''});setErrs({});setShowAdd(false);toast('✓ Client ajouté');};
-  const delC=id=>{const h=factures.some(f=>f.cid===id);if(h&&!window.confirm('Ce client a des factures. Supprimer quand même ?'))return;setClients(p=>p.filter(c=>c.id!==id));};
-  const stats=cid=>{const fs=factures.filter(f=>f.cid===cid);return{total:fs.length,retard:fs.filter(f=>f.statut==='retard').reduce((s,f)=>s+f.montant,0),encaisse:fs.filter(f=>f.statut==='payee').reduce((s,f)=>s+f.montant,0)};};
+
+  const addC=async()=>{
+    if(!validate())return;
+    setSaving(true);
+    const{data,error}=await sb.from('clients').insert({...form,user_id:user.id}).select().single();
+    if(error){toast('✕ Erreur lors de la création','error');}
+    else{setClients(p=>[...p,data]);toast('✓ Client ajouté');}
+    setForm({nom:'',email:'',tel:''});setErrs({});setShowAdd(false);setSaving(false);
+  };
+
+  const delC=async id=>{
+    const h=factures.some(f=>f.client_id===id);
+    if(h&&!window.confirm('Ce client a des factures. Supprimer quand même ?'))return;
+    await sb.from('clients').delete().eq('id',id);
+    setClients(p=>p.filter(c=>c.id!==id));
+  };
+
+  const stats=cid=>{const fs=factures.filter(f=>f.client_id===cid);return{total:fs.length,retard:fs.filter(f=>f.statut==='retard').reduce((s,f)=>s+f.montant,0),encaisse:fs.filter(f=>f.statut==='payee').reduce((s,f)=>s+f.montant,0)};};
+
   return(
     <div>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem'}}>
         <h2 style={{color:T.white,fontSize:'1.5rem',fontWeight:800,margin:0,letterSpacing:'-0.5px'}}>Clients ({clients.length})</h2>
         <Btn onClick={()=>setShowAdd(true)}>+ Nouveau client</Btn>
       </div>
+      {!clients.length&&(
+        <div style={{textAlign:'center',padding:'4rem',background:T.bg2,border:`1px solid ${T.bd}`,borderRadius:T.r12}}>
+          <div style={{fontSize:'2rem',marginBottom:'1rem'}}>👥</div>
+          <div style={{color:T.white,fontWeight:600,marginBottom:'8px'}}>Aucun client pour l'instant</div>
+          <div style={{color:T.muted,fontSize:'14px',marginBottom:'1.5rem'}}>Ajoutez vos premiers clients pour commencer à gérer vos factures.</div>
+          <Btn onClick={()=>setShowAdd(true)}>+ Ajouter un client</Btn>
+        </div>
+      )}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(270px,1fr))',gap:'1rem'}}>
         {clients.map(c=>{const st=stats(c.id);return(
           <div key={c.id} style={{background:T.bg2,border:`1px solid ${st.retard>0?'rgba(248,81,73,0.25)':T.bd}`,borderRadius:T.r12,padding:'1.25rem',position:'relative'}}>
@@ -451,7 +466,7 @@ function Clients({clients,setClients,factures,toast}){
           <Input label="Téléphone" placeholder="04 00 00 00 00" value={form.tel} onChange={e=>setForm({...form,tel:e.target.value})}/>
           <div style={{display:'flex',justifyContent:'flex-end',gap:'8px',marginTop:'8px'}}>
             <Btn onClick={()=>{setShowAdd(false);setErrs({});}} variant="outline">Annuler</Btn>
-            <Btn onClick={addC}>Créer</Btn>
+            <Btn onClick={addC} loading={saving}>Créer</Btn>
           </div>
         </Modal>
       )}
@@ -459,68 +474,73 @@ function Clients({clients,setClients,factures,toast}){
   );
 }
 
-function Parametres({settings,setSettings,toast}){
-  const [ej,setEj]=useState({...settings.emailjs});
-  const [url,setUrl]=useState(settings.sheetsUrl||'');
-  const [co,setCo]=useState(settings.companyName||'');
-  const saveEJ=()=>{setSettings(s=>({...s,emailjs:ej,companyName:co}));toast('✓ EmailJS sauvegardé');};
-  const saveSheet=()=>{setSettings(s=>({...s,sheetsUrl:url}));toast('✓ URL Sheets sauvegardée');};
-  const tmpl=`Bonjour {{to_name}},\n\nNous vous contactons au sujet de votre facture n°{{invoice_number}} d'un montant de {{amount}}, dont la date d'échéance était le {{due_date}}.\n\nCe règlement est en attente depuis {{days_late}}.\n\nMerci de bien vouloir procéder au paiement dans les meilleurs délais.\n\nCordialement,\n{{company_name}}`;
-  return(
-    <div>
-      <h2 style={{color:T.white,fontSize:'1.5rem',fontWeight:800,margin:'0 0 1.5rem',letterSpacing:'-0.5px'}}>Paramètres</h2>
-      <SectionCard title="Connexion Google Sheets" icon="🔗">
-        <StepGuide steps={['Ouvrez votre Google Sheets','<strong style="color:#e6edf3">Fichier → Partager → Publier sur le web</strong>','Choisissez votre feuille, format <strong style="color:#e6edf3">CSV</strong>, puis Publier','Copiez l\'URL et collez-la ci-dessous']}/>
-        <div style={{display:'flex',gap:'8px'}}>
-          <input value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv" style={{flex:1,padding:'9px 12px',background:T.bg3,border:`1px solid ${T.bd}`,borderRadius:T.r8,color:T.text,fontSize:'13px',outline:'none'}}/>
-          <Btn onClick={saveSheet} disabled={!url.trim()}>Sauvegarder</Btn>
-        </div>
-        {settings.sheetsUrl&&<div style={{fontSize:'12px',color:'#3fb950',marginTop:'8px'}}>✓ URL configurée</div>}
-      </SectionCard>
-      <SectionCard title="Relances email — EmailJS" icon="✉">
-        <StepGuide steps={['Créez un compte sur <strong style="color:#79c0ff">emailjs.com</strong>','Ajoutez votre Gmail dans <strong style="color:#e6edf3">Email Services</strong>','Créez un template dans <strong style="color:#e6edf3">Email Templates</strong>','Copiez <strong style="color:#e6edf3">Service ID</strong>, <strong style="color:#e6edf3">Template ID</strong> et <strong style="color:#e6edf3">Public Key</strong>']}/>
-        <div style={{marginBottom:'1.5rem'}}>
-          <div style={{fontSize:'13px',color:T.muted,marginBottom:'8px',fontWeight:500}}>Template à copier sur EmailJS :</div>
-          <pre style={{background:T.bg3,border:`1px solid ${T.bd}`,borderRadius:T.r8,padding:'14px',fontSize:'12px',color:'#e6edf3',lineHeight:1.7,overflow:'auto',margin:0,whiteSpace:'pre-wrap'}}>{tmpl}</pre>
-        </div>
-        <Input label="Nom de votre entreprise" placeholder="Mon Entreprise SAS" value={co} onChange={e=>setCo(e.target.value)}/>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'1rem'}}>
-          <Input label="Service ID" placeholder="service_xxxx" value={ej.serviceId} onChange={e=>setEj({...ej,serviceId:e.target.value})}/>
-          <Input label="Template ID" placeholder="template_xxxx" value={ej.templateId} onChange={e=>setEj({...ej,templateId:e.target.value})}/>
-          <Input label="Public Key" placeholder="xxxxxxxxxxxxxxx" value={ej.publicKey} onChange={e=>setEj({...ej,publicKey:e.target.value})}/>
-        </div>
-        <Btn onClick={saveEJ} disabled={!ej.serviceId||!ej.templateId||!ej.publicKey}>Sauvegarder</Btn>
-      </SectionCard>
-    </div>
-  );
-}
-
+// ── APP ───────────────────────────────────────────────────
 function App(){
+  const [session,setSession]=useState(null);
+  const [loading,setLoading]=useState(true);
   const [view,setView]=useState('dashboard');
-  const [clients,setClients]=useState(()=>{try{const v=localStorage.getItem('rv-clients');return v?JSON.parse(v):INIT_CLIENTS;}catch{return INIT_CLIENTS;}});
-  const [factures,setFactures]=useState(()=>{try{const v=localStorage.getItem('rv-factures');return v?JSON.parse(v):INIT_FACTURES;}catch{return INIT_FACTURES;}});
-  const [settings,setSettings]=useState(()=>{try{const v=localStorage.getItem('rv-settings');return v?{...INIT_SETTINGS,...JSON.parse(v)}:INIT_SETTINGS;}catch{return INIT_SETTINGS;}});
+  const [clients,setClients]=useState([]);
+  const [factures,setFactures]=useState([]);
   const [toastData,setToastData]=useState(null);
   const toast=(msg,type='success')=>setToastData({msg,type,key:uid()});
-  useEffect(()=>{try{localStorage.setItem('rv-clients',JSON.stringify(clients));}catch(e){}},[clients]);
-  useEffect(()=>{try{localStorage.setItem('rv-factures',JSON.stringify(factures));}catch(e){}},[factures]);
-  useEffect(()=>{try{localStorage.setItem('rv-settings',JSON.stringify(settings));}catch(e){}},[settings]);
+
+  useEffect(()=>{
+    sb.auth.getSession().then(({data:{session}})=>{
+      setSession(session);
+      setLoading(false);
+    });
+    const{data:{subscription}}=sb.auth.onAuthStateChange((_,session)=>{
+      setSession(session);
+      if(!session){setClients([]);setFactures([]);}
+    });
+    return()=>subscription.unsubscribe();
+  },[]);
+
+  useEffect(()=>{
+    if(!session)return;
+    const loadData=async()=>{
+      const[{data:c},{data:f}]=await Promise.all([
+        sb.from('clients').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}),
+        sb.from('factures').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}),
+      ]);
+      if(c)setClients(c);
+      if(f)setFactures(f);
+    };
+    loadData();
+  },[session]);
+
+  const logout=async()=>{
+    await sb.auth.signOut();
+    setSession(null);
+    setView('dashboard');
+  };
+
+  if(loading)return(
+    <div style={{minHeight:'100vh',background:T.bg,display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{textAlign:'center'}}>
+        <div style={{fontSize:'32px',fontWeight:900,color:T.white,letterSpacing:'-1px',marginBottom:'1rem'}}>ferply<span style={{color:T.teal}}>.</span></div>
+        <div style={{color:T.muted,fontSize:'14px'}}>Chargement...</div>
+      </div>
+    </div>
+  );
+
+  if(!session)return <AuthPage onAuth={()=>sb.auth.getSession().then(({data:{session}})=>setSession(session))}/>;
+
   const retardCount=factures.filter(f=>f.statut==='retard').length;
-  const ejOk=settings.emailjs.serviceId&&settings.emailjs.templateId&&settings.emailjs.publicKey;
-  const sheetsOk=!!settings.sheetsUrl;
   const nav=[
     {id:'dashboard',icon:'⊞',label:'Dashboard'},
-    {id:'factures',icon:'📄',label:'Factures',badge:sheetsOk?'●':null,bc:T.teal},
-    {id:'relances',icon:'⚡',label:'Relances',badge:retardCount||null,bc:'#f85149'},
-    {id:'clients',icon:'👥',label:'Clients'},
-    {id:'parametres',icon:'⚙',label:'Paramètres',badge:(!ejOk||!sheetsOk)?'!':null,bc:'#d29922'},
+    {id:'factures', icon:'📄',label:'Factures'},
+    {id:'relances', icon:'⚡',label:'Relances',badge:retardCount||null,bc:'#f85149'},
+    {id:'clients',  icon:'👥',label:'Clients'},
   ];
+
   return(
     <div style={{display:'flex',height:'100vh',background:T.bg,color:T.text,overflow:'hidden',fontSize:'14px'}}>
+      <style>{`*{box-sizing:border-box} input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.6)}`}</style>
       <aside style={{width:'210px',flexShrink:0,background:T.bg2,borderRight:`1px solid ${T.bd}`,display:'flex',flexDirection:'column'}}>
         <div style={{padding:'1.25rem',borderBottom:`1px solid ${T.bd}`}}>
           <div style={{fontSize:'22px',fontWeight:900,color:T.white,letterSpacing:'-1px'}}>ferply<span style={{color:T.teal}}>.</span></div>
-          <div style={{fontSize:'11px',color:T.muted,marginTop:'2px'}}>MVP v1.0</div>
+          <div style={{fontSize:'11px',color:T.muted,marginTop:'2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{session.user.email}</div>
         </div>
         <nav style={{padding:'1rem 0',flex:1}}>
           {nav.map(n=>(
@@ -531,18 +551,19 @@ function App(){
             </button>
           ))}
         </nav>
-        <div style={{padding:'1rem 1.25rem',borderTop:`1px solid ${T.bd}`,fontSize:'12px'}}>
-          <div style={{color:'#3fb950',marginBottom:'3px'}}>● Sauvegarde locale active</div>
-          <div style={{color:T.muted}}>{clients.length} clients · {factures.length} factures</div>
-          <div style={{color:ejOk?'#3fb950':'#d29922',marginTop:'3px'}}>{ejOk?'✓ Emails actifs':'⚙ Email non configuré'}</div>
+        <div style={{padding:'1rem 1.25rem',borderTop:`1px solid ${T.bd}`}}>
+          <div style={{fontSize:'12px',color:T.muted,marginBottom:'10px'}}>
+            <div style={{color:'#3fb950',marginBottom:'3px'}}>🔒 Connexion sécurisée</div>
+            <div>{clients.length} clients · {factures.length} factures</div>
+          </div>
+          <Btn onClick={logout} variant="outline" full style={{fontSize:'12px',padding:'7px'}}>Se déconnecter</Btn>
         </div>
       </aside>
       <main style={{flex:1,overflow:'auto',padding:'2rem',background:T.bg}}>
         {view==='dashboard'&&<Dashboard clients={clients} factures={factures} setView={setView}/>}
-        {view==='factures'&&<Factures clients={clients} factures={factures} setFactures={setFactures} settings={settings} setView={setView} toast={toast}/>}
-        {view==='relances'&&<Relances clients={clients} factures={factures} setFactures={setFactures} settings={settings} setView={setView} toast={toast}/>}
-        {view==='clients'&&<Clients clients={clients} setClients={setClients} factures={factures} toast={toast}/>}
-        {view==='parametres'&&<Parametres settings={settings} setSettings={setSettings} toast={toast}/>}
+        {view==='factures' &&<Factures  user={session.user} clients={clients} factures={factures} setFactures={setFactures} setView={setView} toast={toast}/>}
+        {view==='relances' &&<Relances  clients={clients} factures={factures} setFactures={setFactures} toast={toast}/>}
+        {view==='clients'  &&<Clients   user={session.user} clients={clients} setClients={setClients} factures={factures} toast={toast}/>}
       </main>
       {toastData&&<Toast key={toastData.key} msg={toastData.msg} type={toastData.type} onDone={()=>setToastData(null)}/>}
     </div>
