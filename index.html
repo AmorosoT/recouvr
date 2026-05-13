@@ -529,7 +529,18 @@ function App(){
         sb.from('clients').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}),
         sb.from('factures').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}),
       ]);
-      if(c)setClients(c);if(f)setFactures(f);
+      if(c)setClients(c);
+      if(f){
+        const today=new Date().toISOString().slice(0,10);
+        const updated=f.map(fac=>{
+          if(fac.statut==='attente'&&fac.echeance&&fac.echeance<today){
+            sb.from('factures').update({statut:'retard'}).eq('id',fac.id);
+            return{...fac,statut:'retard'};
+          }
+          return fac;
+        });
+        setFactures(updated);
+      }
     })();
   },[session]);
 
@@ -576,7 +587,7 @@ function App(){
             <div style={{color:'#86efac',marginBottom:'3px'}}>🔒 Connexion sécurisée</div>
             <div style={{color:'#64748b'}}>{clients.length} clients · {factures.length} factures</div>
           </div>
-          <Btn onClick={logout} variant="sidebarBtn" full style={{fontSize:'12px',padding:'7px'}}>Se déconnecter</Btn>
+          <Btn onClick={logout} variant="sidebarBtn" full style={{fontSize:'12px',padding:'7px',color:'#f87171',borderColor:'rgba(248,113,113,0.3)'}}>Se déconnecter</Btn>
         </div>
       </aside>
       {/* MAIN */}
