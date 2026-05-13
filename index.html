@@ -506,6 +506,113 @@ function Clients({user,clients,setClients,factures,toast}){
   );
 }
 
+/* ── PARAMÈTRES ─────────────────────────────────────────── */
+function Parametres({user,toast}){
+  const [settings,setSettings]=useState({serviceId:'',templateId:'',publicKey:'',companyName:''});
+  const [saved,setSaved]=useState(false);
+  const [testing,setTesting]=useState(false);
+
+  useEffect(()=>{
+    const s=localStorage.getItem('ferply-emailjs');
+    if(s)setSettings(JSON.parse(s));
+  },[]);
+
+  const save=()=>{
+    localStorage.setItem('ferply-emailjs',JSON.stringify(settings));
+    setSaved(true);
+    setTimeout(()=>setSaved(false),3000);
+    toast('✓ Configuration EmailJS sauvegardée');
+  };
+
+  const testEmail=async()=>{
+    if(!settings.serviceId||!settings.templateId||!settings.publicKey){toast('⚠ Remplissez d\'abord les 3 champs EmailJS','error');return;}
+    setTesting(true);
+    try{
+      const res=await fetch('https://api.emailjs.com/api/v1.0/email/send',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({service_id:settings.serviceId,template_id:settings.templateId,user_id:settings.publicKey,
+          template_params:{to_name:'Test',to_email:user.email,invoice_number:'FAC-TEST-001',amount:'1 000 €',due_date:'01/01/2025',days_late:'30 jours',company_name:settings.companyName||'Ferply'}})
+      });
+      if(res.ok){toast('✓ Email de test envoyé à '+user.email);}
+      else{toast('✕ Erreur EmailJS — vérifiez vos clés','error');}
+    }catch(e){toast('✕ Erreur : '+e.message,'error');}
+    setTesting(false);
+  };
+
+  const steps=[
+    {num:1,title:'Créer un compte EmailJS',desc:'Service gratuit jusqu\'à 200 emails/mois',btn:'Ouvrir EmailJS',url:'https://www.emailjs.com/',color:C.blue},
+    {num:2,title:'Créer un service email',desc:'Connectez votre Gmail ou autre adresse',btn:'Email Services',url:'https://dashboard.emailjs.com/admin',color:'#7c3aed'},
+    {num:3,title:'Créer un template',desc:'Utilisez le template ci-dessous',btn:'Email Templates',url:'https://dashboard.emailjs.com/admin/templates',color:'#059669'},
+    {num:4,title:'Récupérer vos clés',desc:'Service ID, Template ID et Public Key',btn:'Account → API Keys',url:'https://dashboard.emailjs.com/admin/account',color:'#b45309'},
+  ];
+
+  const template=`Bonjour {{to_name}},\n\nNous vous contactons au sujet de votre facture n°{{invoice_number}} d'un montant de {{amount}}, dont la date d'échéance était le {{due_date}}.\n\nCe règlement est en attente depuis {{days_late}}.\n\nMerci de procéder au paiement dans les meilleurs délais.\n\nCordialement,\n{{company_name}}`;
+
+  const ejOk=settings.serviceId&&settings.templateId&&settings.publicKey;
+
+  return(
+    <div>
+      <div style={{marginBottom:'1.5rem'}}>
+        <h2 style={{color:C.textPrimary,fontSize:'1.5rem',fontWeight:800,margin:0}}>Paramètres</h2>
+        <p style={{color:C.textSecondary,fontSize:'14px',marginTop:'4px'}}>Configuration des relances email automatiques</p>
+      </div>
+
+      {/* Status EmailJS */}
+      <div style={{background:ejOk?C.greenBg:C.amberBg,border:`1px solid ${ejOk?C.green+'44':C.amber+'44'}`,borderRadius:'12px',padding:'1rem 1.25rem',marginBottom:'1.5rem',display:'flex',alignItems:'center',gap:'12px'}}>
+        <span style={{fontSize:'20px'}}>{ejOk?'✅':'⚠️'}</span>
+        <div>
+          <div style={{color:ejOk?C.green:C.amber,fontWeight:700,fontSize:'14px'}}>{ejOk?'EmailJS configuré — relances actives':'EmailJS non configuré — suivez les étapes ci-dessous'}</div>
+          <div style={{color:C.textSecondary,fontSize:'13px'}}>{ejOk?`Service : ${settings.serviceId} · Template : ${settings.templateId}`:'Les relances seront enregistrées mais pas envoyées par email'}</div>
+        </div>
+      </div>
+
+      {/* Étapes */}
+      <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',padding:'1.5rem',marginBottom:'1.5rem',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+        <h3 style={{color:C.textPrimary,fontWeight:700,fontSize:'15px',marginBottom:'1.25rem'}}>Guide de configuration — 4 étapes</h3>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'1rem'}}>
+          {steps.map(s=>(
+            <div key={s.num} style={{background:C.pageBg,border:`1px solid ${C.border}`,borderRadius:'10px',padding:'1rem',display:'flex',gap:'12px',alignItems:'flex-start'}}>
+              <div style={{width:32,height:32,borderRadius:'50%',background:s.color,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:'14px',flexShrink:0}}>{s.num}</div>
+              <div style={{flex:1}}>
+                <div style={{color:C.textPrimary,fontWeight:600,fontSize:'14px',marginBottom:'3px'}}>{s.title}</div>
+                <div style={{color:C.textSecondary,fontSize:'12px',marginBottom:'8px'}}>{s.desc}</div>
+                <a href={s.url} target="_blank" rel="noopener noreferrer"
+                  style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'5px 12px',borderRadius:'6px',background:s.color,color:'#fff',fontSize:'12px',fontWeight:600,textDecoration:'none'}}>
+                  {s.btn} ↗
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Template */}
+      <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',padding:'1.5rem',marginBottom:'1.5rem',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+        <h3 style={{color:C.textPrimary,fontWeight:700,fontSize:'15px',marginBottom:'8px'}}>Template email à copier sur EmailJS</h3>
+        <p style={{color:C.textSecondary,fontSize:'13px',marginBottom:'12px'}}>Copiez ce texte dans le contenu de votre template EmailJS</p>
+        <pre style={{background:C.pageBg,border:`1px solid ${C.border}`,borderRadius:'8px',padding:'14px',fontSize:'13px',color:C.textPrimary,lineHeight:1.7,overflow:'auto',margin:'0 0 12px',whiteSpace:'pre-wrap'}}>{template}</pre>
+        <p style={{fontSize:'12px',color:C.textSecondary}}>Variables : <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{to_name}}'}</code> <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{to_email}}'}</code> <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{invoice_number}}'}</code> <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{amount}}'}</code> <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{due_date}}'}</code> <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{days_late}}'}</code> <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{company_name}}'}</code></p>
+      </div>
+
+      {/* Config form */}
+      <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',padding:'1.5rem',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+        <h3 style={{color:C.textPrimary,fontWeight:700,fontSize:'15px',marginBottom:'1.25rem'}}>Entrez vos clés EmailJS</h3>
+        <Input label="Nom de votre entreprise" placeholder="Mon Entreprise SAS" value={settings.companyName} onChange={e=>setSettings({...settings,companyName:e.target.value})}/>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'1rem'}}>
+          <Input label="Service ID" placeholder="service_xxxx" value={settings.serviceId} onChange={e=>setSettings({...settings,serviceId:e.target.value})}/>
+          <Input label="Template ID" placeholder="template_xxxx" value={settings.templateId} onChange={e=>setSettings({...settings,templateId:e.target.value})}/>
+          <Input label="Public Key" placeholder="xxxxxxxxxxxxxxx" value={settings.publicKey} onChange={e=>setSettings({...settings,publicKey:e.target.value})}/>
+        </div>
+        <div style={{display:'flex',gap:'12px',marginTop:'8px'}}>
+          <Btn onClick={save}>💾 Sauvegarder</Btn>
+          {ejOk&&<Btn onClick={testEmail} loading={testing} variant="outline">✉ Envoyer un email de test</Btn>}
+          {ejOk&&<a href="https://dashboard.emailjs.com/admin" target="_blank" rel="noopener noreferrer" style={{display:'inline-flex',alignItems:'center',padding:'9px 18px',borderRadius:'8px',background:C.pageBg,border:`1px solid ${C.border}`,color:C.textSecondary,fontSize:'13px',fontWeight:600,textDecoration:'none'}}>Tableau de bord EmailJS ↗</a>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── APP ─────────────────────────────────────────────────── */
 function App(){
   const [session,setSession]=useState(null);
@@ -563,6 +670,7 @@ function App(){
     {id:'factures', icon:'📄',label:'Factures'},
     {id:'relances', icon:'⚡',label:'Relances',badge:retardCount||null},
     {id:'clients',  icon:'👥',label:'Clients'},
+    {id:'parametres',icon:'⚙️',label:'Paramètres'},
   ];
 
   return(
@@ -595,7 +703,7 @@ function App(){
         {view==='dashboard'&&<Dashboard clients={clients} factures={factures} setView={setView}/>}
         {view==='factures' &&<Factures  user={session.user} clients={clients} factures={factures} setFactures={setFactures} setView={setView} toast={toast}/>}
         {view==='relances' &&<Relances  clients={clients} factures={factures} setFactures={setFactures} toast={toast}/>}
-        {view==='clients'  &&<Clients   user={session.user} clients={clients} setClients={setClients} factures={factures} toast={toast}/>}
+        {view==='parametres'&&<Parametres user={session.user} toast={toast}/>}
       </main>
       {toastData&&<Toast key={toastData.key} msg={toastData.msg} type={toastData.type} onDone={()=>setToastData(null)}/>}
     </div>
