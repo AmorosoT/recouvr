@@ -439,8 +439,6 @@ function Clients({user,clients,setClients,factures,toast}){
   const [form,setForm]=useState({nom:'',email:'',tel:''});
   const [errs,setErrs]=useState({});
   const [saving,setSaving]=useState(false);
-
-  const validate=()=>{const e={};if(!form.nom)e.nom='Requis';if(!form.email||!form.email.includes('@'))e.email='Invalide';setErrs(e);return!Object.keys(e).length;};
   const addC=async()=>{
     if(!validate())return;setSaving(true);
     const{data,error}=await sb.from('clients').insert({...form,user_id:user.id}).select().single();
@@ -546,7 +544,10 @@ function Parametres({user,toast}){
     {num:4,title:'Récupérer vos clés',desc:'Service ID, Template ID et Public Key',btn:'Account → API Keys',url:'https://dashboard.emailjs.com/admin/account',color:'#b45309'},
   ];
 
-  const template=`Bonjour {{to_name}},\n\nNous vous contactons au sujet de votre facture n°{{invoice_number}} d'un montant de {{amount}}, dont la date d'échéance était le {{due_date}}.\n\nCe règlement est en attente depuis {{days_late}}.\n\nMerci de procéder au paiement dans les meilleurs délais.\n\nCordialement,\n{{company_name}}`;
+  const defaultTemplate=`Bonjour {{to_name}},\n\nNous vous contactons au sujet de votre facture n°{{invoice_number}} d'un montant de {{amount}}, dont la date d'échéance était le {{due_date}}.\n\nCe règlement est en attente depuis {{days_late}}.\n\nMerci de procéder au paiement dans les meilleurs délais.\n\nCordialement,\n{{company_name}}`;
+  const [template,setTemplate]=useState(()=>{const s=localStorage.getItem('ferply-template');return s||defaultTemplate;});
+  const saveTemplate=()=>{localStorage.setItem('ferply-template',template);toast('✓ Template sauvegardé');};
+  const resetTemplate=()=>{setTemplate(defaultTemplate);localStorage.setItem('ferply-template',defaultTemplate);toast('✓ Template réinitialisé');};
 
   const ejOk=settings.serviceId&&settings.templateId&&settings.publicKey;
 
@@ -586,12 +587,41 @@ function Parametres({user,toast}){
         </div>
       </div>
 
-      {/* Template */}
+      {/* Template éditeur */}
       <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:'12px',padding:'1.5rem',marginBottom:'1.5rem',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
-        <h3 style={{color:C.textPrimary,fontWeight:700,fontSize:'15px',marginBottom:'8px'}}>Template email à copier sur EmailJS</h3>
-        <p style={{color:C.textSecondary,fontSize:'13px',marginBottom:'12px'}}>Copiez ce texte dans le contenu de votre template EmailJS</p>
-        <pre style={{background:C.pageBg,border:`1px solid ${C.border}`,borderRadius:'8px',padding:'14px',fontSize:'13px',color:C.textPrimary,lineHeight:1.7,overflow:'auto',margin:'0 0 12px',whiteSpace:'pre-wrap'}}>{template}</pre>
-        <p style={{fontSize:'12px',color:C.textSecondary}}>Variables : <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{to_name}}'}</code> <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{to_email}}'}</code> <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{invoice_number}}'}</code> <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{amount}}'}</code> <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{due_date}}'}</code> <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{days_late}}'}</code> <code style={{color:C.blue,background:C.blueLight,padding:'2px 6px',borderRadius:'4px'}}>{'{{company_name}}'}</code></p>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+          <h3 style={{color:C.textPrimary,fontWeight:700,fontSize:'15px',margin:0}}>✏️ Votre message de relance personnalisé</h3>
+          <Btn onClick={resetTemplate} variant="ghost" style={{fontSize:'12px',color:C.textMuted}}>↺ Réinitialiser</Btn>
+        </div>
+        <p style={{color:C.textSecondary,fontSize:'13px',marginBottom:'12px'}}>Rédigez votre propre message. Les variables entre <code style={{color:C.blue,background:C.blueLight,padding:'1px 5px',borderRadius:'4px'}}>{'{{...}}'}</code> seront remplacées automatiquement.</p>
+        <textarea
+          value={template}
+          onChange={e=>setTemplate(e.target.value)}
+          rows={10}
+          style={{width:'100%',padding:'14px',background:C.inputBg,border:`1.5px solid ${C.border}`,borderRadius:'8px',color:C.textPrimary,fontSize:'14px',outline:'none',fontFamily:'Georgia, serif',lineHeight:1.8,boxSizing:'border-box',transition:'border-color .15s'}}
+          onFocus={e=>e.target.style.borderColor=C.blue}
+          onBlur={e=>e.target.style.borderColor=C.border}
+        />
+        <div style={{marginTop:'12px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'8px'}}>
+          <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+            {['{{to_name}}','{{to_email}}','{{invoice_number}}','{{amount}}','{{due_date}}','{{days_late}}','{{company_name}}'].map(v=>(
+              <button key={v} onClick={()=>setTemplate(t=>t+' '+v)}
+                style={{padding:'3px 8px',borderRadius:'4px',background:C.blueLight,color:C.blue,border:'none',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>
+                + {v}
+              </button>
+            ))}
+          </div>
+          <Btn onClick={saveTemplate}>💾 Sauvegarder le message</Btn>
+        </div>
+        <div style={{marginTop:'12px',padding:'10px 14px',background:C.pageBg,borderRadius:'8px',fontSize:'12px',color:C.textSecondary,lineHeight:1.7}}>
+          <strong style={{color:C.textPrimary}}>Variables disponibles :</strong><br/>
+          <code style={{color:C.blue}}>{'{{to_name}}'}</code> → Nom du client &nbsp;·&nbsp;
+          <code style={{color:C.blue}}>{'{{invoice_number}}'}</code> → N° facture &nbsp;·&nbsp;
+          <code style={{color:C.blue}}>{'{{amount}}'}</code> → Montant &nbsp;·&nbsp;
+          <code style={{color:C.blue}}>{'{{due_date}}'}</code> → Date d'échéance &nbsp;·&nbsp;
+          <code style={{color:C.blue}}>{'{{days_late}}'}</code> → Jours de retard &nbsp;·&nbsp;
+          <code style={{color:C.blue}}>{'{{company_name}}'}</code> → Votre entreprise
+        </div>
       </div>
 
       {/* Config form */}
